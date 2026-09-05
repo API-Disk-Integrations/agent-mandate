@@ -1,0 +1,2061 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Agent Mandate API",
+    "version": "1.0.0",
+    "description": "Convert user intent into signed mandates and verify consequential agent actions against mandate, policy and approvals."
+  },
+  "servers": [
+    {
+      "url": "https://agentmandate-api.com"
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Liveness and deployed version",
+        "operationId": "getHealth",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "summary": "Service index — endpoints, auth and error format",
+        "operationId": "get/",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/mandates": {
+      "post": {
+        "summary": "Issue a signed mandate",
+        "description": "Signs a grant of authority to an agent and returns the mandate with a detached HMAC-SHA256 signature over its canonical bytes. The document is self-contained — store it wherever you like and present it on every verification. The signing key is per-account and never leaves the service, so a mandate signed for one account cannot verify under another.",
+        "operationId": "postV1Mandates",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "mandate": {
+                      "type": "object"
+                    },
+                    "signature": {
+                      "type": "string",
+                      "description": "v1:<hex>. Detached — keep it with the mandate."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "principal",
+                  "agent",
+                  "expiresAt",
+                  "grants"
+                ],
+                "properties": {
+                  "principal": {
+                    "type": "string",
+                    "description": "Who granted the authority — the user or org the agent acts for."
+                  },
+                  "agent": {
+                    "type": "string",
+                    "description": "Who holds it. A verification for a different agent is denied."
+                  },
+                  "notBefore": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "Defaults to now."
+                  },
+                  "expiresAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "Required. A mandate without an end is not a mandate."
+                  },
+                  "grants": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 100,
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "action"
+                      ],
+                      "properties": {
+                        "action": {
+                          "type": "string",
+                          "description": "Dotted action name. A single trailing \".*\" matches one further segment — \"payments.*\" covers \"payments.transfer\" but not \"payments.transfer.bulk\"."
+                        },
+                        "resources": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "Resource patterns, matched the same way. Omit to place no resource constraint; an empty array is rejected rather than silently granting none."
+                        },
+                        "maxAmountMinor": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Hard per-action cap, integer minor units (cents)."
+                        },
+                        "approvalRequiredAboveMinor": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Above this, the action returns requires_approval unless a valid approvalToken is supplied."
+                        },
+                        "maxCount": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "description": "How many times this action may be taken under this mandate."
+                        }
+                      }
+                    }
+                  },
+                  "totalSpendCapMinor": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Ceiling across every action, integer minor units."
+                  },
+                  "currency": {
+                    "type": "string",
+                    "description": "ISO-4217. Required whenever any monetary cap is set."
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "description": "Carried into the receipt, never interpreted."
+                  }
+                }
+              },
+              "example": {
+                "principal": "user_8814",
+                "agent": "agent_procurement_v3",
+                "expiresAt": "2026-12-31T23:59:59Z",
+                "currency": "USD",
+                "totalSpendCapMinor": 500000,
+                "grants": [
+                  {
+                    "action": "payments.transfer",
+                    "resources": [
+                      "vendor.acme",
+                      "vendor.globex"
+                    ],
+                    "maxAmountMinor": 100000,
+                    "approvalRequiredAboveMinor": 25000
+                  },
+                  {
+                    "action": "invoices.*",
+                    "maxCount": 50
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "x-quota-cost": 0
+      }
+    },
+    "/v1/verify": {
+      "post": {
+        "summary": "Verify proposed actions against a mandate",
+        "description": "Deny-by-default: an action matching no grant is denied. Returns a receipt per action with the decision, the grant that decided it, every violation (not just the first) and a digest that pins the evaluation. Send one \"action\" or up to 500 in \"actions\" — billing is one unit per action verified.",
+        "operationId": "postV1Verify",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "count": {
+                      "type": "integer"
+                    },
+                    "receipts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "decision": {
+                            "type": "string",
+                            "enum": [
+                              "allow",
+                              "deny",
+                              "requires_approval"
+                            ]
+                          },
+                          "mandateId": {
+                            "type": "string"
+                          },
+                          "agent": {
+                            "type": "string"
+                          },
+                          "principal": {
+                            "type": "string"
+                          },
+                          "action": {
+                            "type": "string"
+                          },
+                          "matchedGrant": {
+                            "type": "object",
+                            "description": "The grant that authorized the action, or null."
+                          },
+                          "matchedGrantIndex": {
+                            "type": "integer"
+                          },
+                          "violations": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "code": {
+                                  "type": "string"
+                                },
+                                "detail": {
+                                  "type": "string"
+                                },
+                                "grantIndex": {
+                                  "type": "integer"
+                                }
+                              }
+                            },
+                            "description": "Every reason, not just the first — an approval queue needs the whole picture."
+                          },
+                          "remainingSpendMinor": {
+                            "type": "integer",
+                            "description": "Headroom under the total cap after this action, or null when uncapped."
+                          },
+                          "evaluatedAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "digest": {
+                            "type": "string",
+                            "description": "SHA-256 over the decision inputs. Pins an audit entry to exactly this evaluation."
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "mandate"
+                ],
+                "properties": {
+                  "mandate": {
+                    "type": "object",
+                    "description": "The object returned by POST /v1/mandates — claims plus signature."
+                  },
+                  "action": {
+                    "type": "object",
+                    "required": [
+                      "action"
+                    ],
+                    "properties": {
+                      "agent": {
+                        "type": "string",
+                        "description": "The agent presenting the mandate. Checked against mandate.agent — supply it, since a mandate is a bearer document and this is what stops a leaked one being replayed by another agent."
+                      },
+                      "action": {
+                        "type": "string",
+                        "description": "Concrete dotted action name. A wildcard is a grant, not an action."
+                      },
+                      "resource": {
+                        "type": "string"
+                      },
+                      "amountMinor": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "Integer minor units. Requires currency."
+                      },
+                      "currency": {
+                        "type": "string"
+                      },
+                      "priorSpendMinor": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "Spend already made under this mandate. You track it; the mandate is stateless."
+                      },
+                      "priorCount": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "Times this action has already been taken under this mandate."
+                      },
+                      "approvalToken": {
+                        "type": "string"
+                      },
+                      "at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Evaluation instant. Supply it to make a decision reproducible."
+                      }
+                    }
+                  },
+                  "actions": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 500,
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "action"
+                      ],
+                      "properties": {
+                        "agent": {
+                          "type": "string",
+                          "description": "The agent presenting the mandate. Checked against mandate.agent — supply it, since a mandate is a bearer document and this is what stops a leaked one being replayed by another agent."
+                        },
+                        "action": {
+                          "type": "string",
+                          "description": "Concrete dotted action name. A wildcard is a grant, not an action."
+                        },
+                        "resource": {
+                          "type": "string"
+                        },
+                        "amountMinor": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Integer minor units. Requires currency."
+                        },
+                        "currency": {
+                          "type": "string"
+                        },
+                        "priorSpendMinor": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Spend already made under this mandate. You track it; the mandate is stateless."
+                        },
+                        "priorCount": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Times this action has already been taken under this mandate."
+                        },
+                        "approvalToken": {
+                          "type": "string"
+                        },
+                        "at": {
+                          "type": "string",
+                          "format": "date-time",
+                          "description": "Evaluation instant. Supply it to make a decision reproducible."
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "example": {
+                "mandate": {
+                  "mandate": {
+                    "id": "mnd_…",
+                    "principal": "user_8814",
+                    "agent": "agent_procurement_v3",
+                    "notBefore": "2026-08-31T00:00:00Z",
+                    "expiresAt": "2026-12-31T23:59:59Z",
+                    "currency": "USD",
+                    "totalSpendCapMinor": 500000,
+                    "grants": [
+                      {
+                        "action": "payments.transfer",
+                        "resources": [
+                          "vendor.acme",
+                          "vendor.globex"
+                        ],
+                        "maxAmountMinor": 100000,
+                        "approvalRequiredAboveMinor": 25000
+                      },
+                      {
+                        "action": "invoices.*",
+                        "maxCount": 50
+                      }
+                    ]
+                  },
+                  "signature": "v1:…"
+                },
+                "action": {
+                  "agent": "agent_procurement_v3",
+                  "action": "payments.transfer",
+                  "resource": "vendor.acme",
+                  "amountMinor": 30000,
+                  "currency": "USD",
+                  "priorSpendMinor": 120000
+                }
+              }
+            }
+          }
+        },
+        "x-quota-cost": 0
+      }
+    },
+    "/v1/mandates/{id}/revoke": {
+      "post": {
+        "summary": "Revoke a mandate",
+        "description": "Adds the mandate to your account's revocation list. Idempotent — revoking twice is not an error. Verifications read a briefly cached copy of that list so they never block on the database, so a revocation takes effect within about ten seconds rather than instantly. That window is stated here rather than hidden.",
+        "operationId": "postV1MandatesIdRevoke",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "mandateId": {
+                      "type": "string"
+                    },
+                    "revoked": {
+                      "type": "boolean"
+                    },
+                    "effectiveWithinSeconds": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "reason": "agent decommissioned"
+              }
+            }
+          }
+        },
+        "x-quota-cost": 0
+      }
+    },
+    "/v1/revocations": {
+      "get": {
+        "summary": "List the mandates you have revoked",
+        "description": "Account-scoped. Useful for reconciling your own records against the list verifications actually consult.",
+        "operationId": "getV1Revocations",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "count": {
+                      "type": "integer"
+                    },
+                    "mandateIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-quota-cost": 0
+      }
+    },
+    "/v1/demo/verify": {
+      "post": {
+        "summary": "Public demo — issue and verify in one call, without a key",
+        "description": "Signs the mandate you describe with a throwaway demo key, then verifies your actions against it. The real engine, capped at 10 actions. Nothing is stored, nothing is metered, and the demo signature is not usable on the authenticated endpoint.",
+        "operationId": "postV1DemoVerify",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "mandate"
+                ],
+                "properties": {
+                  "mandate": {
+                    "type": "object",
+                    "required": [
+                      "principal",
+                      "agent",
+                      "expiresAt",
+                      "grants"
+                    ],
+                    "properties": {
+                      "principal": {
+                        "type": "string",
+                        "description": "Who granted the authority — the user or org the agent acts for."
+                      },
+                      "agent": {
+                        "type": "string",
+                        "description": "Who holds it. A verification for a different agent is denied."
+                      },
+                      "notBefore": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Defaults to now."
+                      },
+                      "expiresAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Required. A mandate without an end is not a mandate."
+                      },
+                      "grants": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 100,
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "action"
+                          ],
+                          "properties": {
+                            "action": {
+                              "type": "string",
+                              "description": "Dotted action name. A single trailing \".*\" matches one further segment — \"payments.*\" covers \"payments.transfer\" but not \"payments.transfer.bulk\"."
+                            },
+                            "resources": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              },
+                              "description": "Resource patterns, matched the same way. Omit to place no resource constraint; an empty array is rejected rather than silently granting none."
+                            },
+                            "maxAmountMinor": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Hard per-action cap, integer minor units (cents)."
+                            },
+                            "approvalRequiredAboveMinor": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Above this, the action returns requires_approval unless a valid approvalToken is supplied."
+                            },
+                            "maxCount": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "description": "How many times this action may be taken under this mandate."
+                            }
+                          }
+                        }
+                      },
+                      "totalSpendCapMinor": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "Ceiling across every action, integer minor units."
+                      },
+                      "currency": {
+                        "type": "string",
+                        "description": "ISO-4217. Required whenever any monetary cap is set."
+                      },
+                      "metadata": {
+                        "type": "object",
+                        "description": "Carried into the receipt, never interpreted."
+                      }
+                    }
+                  },
+                  "action": {
+                    "type": "object",
+                    "required": [
+                      "action"
+                    ],
+                    "properties": {
+                      "agent": {
+                        "type": "string",
+                        "description": "The agent presenting the mandate. Checked against mandate.agent — supply it, since a mandate is a bearer document and this is what stops a leaked one being replayed by another agent."
+                      },
+                      "action": {
+                        "type": "string",
+                        "description": "Concrete dotted action name. A wildcard is a grant, not an action."
+                      },
+                      "resource": {
+                        "type": "string"
+                      },
+                      "amountMinor": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "Integer minor units. Requires currency."
+                      },
+                      "currency": {
+                        "type": "string"
+                      },
+                      "priorSpendMinor": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "Spend already made under this mandate. You track it; the mandate is stateless."
+                      },
+                      "priorCount": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "Times this action has already been taken under this mandate."
+                      },
+                      "approvalToken": {
+                        "type": "string"
+                      },
+                      "at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Evaluation instant. Supply it to make a decision reproducible."
+                      }
+                    }
+                  },
+                  "actions": {
+                    "type": "array",
+                    "maxItems": 10,
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "action"
+                      ],
+                      "properties": {
+                        "agent": {
+                          "type": "string",
+                          "description": "The agent presenting the mandate. Checked against mandate.agent — supply it, since a mandate is a bearer document and this is what stops a leaked one being replayed by another agent."
+                        },
+                        "action": {
+                          "type": "string",
+                          "description": "Concrete dotted action name. A wildcard is a grant, not an action."
+                        },
+                        "resource": {
+                          "type": "string"
+                        },
+                        "amountMinor": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Integer minor units. Requires currency."
+                        },
+                        "currency": {
+                          "type": "string"
+                        },
+                        "priorSpendMinor": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Spend already made under this mandate. You track it; the mandate is stateless."
+                        },
+                        "priorCount": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Times this action has already been taken under this mandate."
+                        },
+                        "approvalToken": {
+                          "type": "string"
+                        },
+                        "at": {
+                          "type": "string",
+                          "format": "date-time",
+                          "description": "Evaluation instant. Supply it to make a decision reproducible."
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "example": {
+                "mandate": {
+                  "principal": "user_8814",
+                  "agent": "agent_procurement_v3",
+                  "expiresAt": "2026-12-31T23:59:59Z",
+                  "currency": "USD",
+                  "totalSpendCapMinor": 500000,
+                  "grants": [
+                    {
+                      "action": "payments.transfer",
+                      "resources": [
+                        "vendor.acme",
+                        "vendor.globex"
+                      ],
+                      "maxAmountMinor": 100000,
+                      "approvalRequiredAboveMinor": 25000
+                    },
+                    {
+                      "action": "invoices.*",
+                      "maxCount": 50
+                    }
+                  ]
+                },
+                "action": {
+                  "action": "payments.transfer",
+                  "resource": "vendor.acme",
+                  "amountMinor": 30000,
+                  "currency": "USD"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/violations": {
+      "get": {
+        "summary": "Every violation code the engine can return",
+        "description": "Branch on these rather than on the human-readable detail, which may change.",
+        "operationId": "getV1Violations",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/checkout": {
+      "post": {
+        "summary": "Start a hosted Square checkout for a paid tier",
+        "description": "Returns a Square-hosted payment URL for the requested tier. No API key is needed — a prospect has not got one yet. The email Square collects becomes the account, so a key issued later for the same address inherits the paid quota. Enterprise returns a contact route rather than a payment link. THIS IS THE PATH FOR SOMEONE WHO IS NOT YET PAYING. It starts a NEW Square recurring subscription, so it is refused with 409 `conflict` (`details.reason` `existing_subscription`) when the request carries a dashboard session for an account that already has a live plan on this API — a second subscription would be charged alongside the first, every month, and this API cannot cancel either one. Change tier with POST /v1/subscription/plan, or, when Square collects your base fee, cancel it with Square first.",
+        "operationId": "postV1Checkout",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "checkoutUrl": {
+                      "type": "string",
+                      "format": "uri",
+                      "description": "Square-hosted payment page. Redirect the buyer here."
+                    },
+                    "tier": {
+                      "type": "string"
+                    },
+                    "sku": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "tier"
+                ],
+                "properties": {
+                  "tier": {
+                    "type": "string",
+                    "description": "developer | growth | scale | enterprise"
+                  }
+                }
+              },
+              "example": {
+                "tier": "developer"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/billing/webhook": {
+      "post": {
+        "summary": "Square billing events, forwarded by the shared hub",
+        "description": "Machine-to-machine only. The shared Square billing hub POSTs signed events here; the signature is verified over the exact request bytes. Not callable by API consumers — documented so the integration is auditable.",
+        "operationId": "postApiBillingWebhook",
+        "security": [
+          {
+            "hubSignature": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/keys": {
+      "post": {
+        "summary": "Request a free sandbox API key (sends a verification email)",
+        "description": "Starts self-serve key issuance. A one-time claim token is emailed to the address you supply; POST it to /v1/keys/claim to receive the key. No key is returned here, and the response is the same whether or not that address already has an account — so this endpoint cannot be used to find out who has one. The email is verified because your account, your usage and your invoice are all keyed to it: issuing on an unverified address would let anyone mint a working key on your account and spend your allowance. Keep using the same address and a paid plan bought with it raises the keys you already hold rather than issuing new ones. Distributed integrations may identify their discovery surface with the optional source object or x-integration-source header; invalid source values are ignored and never block key issuance.",
+        "operationId": "postV1Keys",
+        "security": [],
+        "responses": {
+          "202": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "verification_sent"
+                      ]
+                    },
+                    "email": {
+                      "type": "string",
+                      "format": "email"
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "After this, request a new one."
+                    },
+                    "next": {
+                      "type": "string",
+                      "description": "The endpoint that turns the emailed token into a key."
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "description": "Where the claim token is sent. This becomes your account."
+                  },
+                  "name": {
+                    "type": "string",
+                    "maxLength": 60,
+                    "description": "Optional label for the key, e.g. \"staging\". Shown in GET /v1/keys."
+                  },
+                  "source": {
+                    "type": "object",
+                    "description": "Optional discovery metadata supplied by a README, SDK, Postman collection or MCP client.",
+                    "properties": {
+                      "source": {
+                        "type": "string"
+                      },
+                      "medium": {
+                        "type": "string"
+                      },
+                      "campaign": {
+                        "type": "string"
+                      },
+                      "content": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              },
+              "example": {
+                "email": "you@example.com",
+                "name": "staging",
+                "source": {
+                  "source": "web",
+                  "medium": "docs"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "List your API keys for this API",
+        "description": "Every key on YOUR account for this API — label, non-secret prefix, status, when it was created, when it was last used, and what it has consumed this period. Authenticate with any active key on the account; the account is taken from that key, never from a parameter, so this can only ever return your own keys. Keys you hold for other APIs in the portfolio are not listed here. Secrets are not returned and cannot be: only a peppered hash is stored. Free, and consumes no quota.",
+        "operationId": "getV1Keys",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "product": {
+                      "type": "string"
+                    },
+                    "accountId": {
+                      "type": "string"
+                    },
+                    "keys": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string",
+                            "description": "The label given at creation."
+                          },
+                          "prefix": {
+                            "type": "string",
+                            "description": "Non-secret leading characters, so you can tell two keys apart without holding either."
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "active",
+                              "revoked"
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "lastUsedAt": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "date-time",
+                            "description": "Null if the key has never been used."
+                          },
+                          "revokedAt": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "date-time"
+                          },
+                          "quotaPerPeriod": {
+                            "type": [
+                              "integer",
+                              "null"
+                            ]
+                          },
+                          "usedInPeriod": {
+                            "type": "integer"
+                          },
+                          "current": {
+                            "type": "boolean",
+                            "description": "True for the key that authenticated this request."
+                          }
+                        }
+                      }
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-quota-cost": 0
+      }
+    },
+    "/v1/keys/claim": {
+      "post": {
+        "summary": "Exchange an emailed claim token for the API key",
+        "description": "Spends the token emailed by POST /v1/keys and returns the key. The key is shown ONCE — only a peppered hash is stored, so it can never be read back; if you lose it, rotate. The key works only on this API, and the allowance it is issued with reflects your account: your paid plan when you have one, the free sandbox allowance when you do not.",
+        "operationId": "postV1KeysClaim",
+        "security": [],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "apiKey": {
+                      "type": "string",
+                      "description": "Shown once and never again. Store it now."
+                    },
+                    "keyId": {
+                      "type": "string",
+                      "description": "Use this with /v1/keys/{id}/revoke and /v1/keys/{id}/rotate."
+                    },
+                    "product": {
+                      "type": "string",
+                      "description": "The key works only on this API."
+                    },
+                    "quotaPerPeriod": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "plan": {
+                      "type": "string",
+                      "description": "The tier this allowance came from, or \"sandbox\" on the free tier."
+                    },
+                    "warning": {
+                      "type": "string"
+                    },
+                    "usage": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "token"
+                ],
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "description": "The claim token from the verification email."
+                  }
+                }
+              },
+              "example": {
+                "token": "EXAMPLE_CLAIM_TOKEN_NOT_A_SECRET"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/keys/{id}/revoke": {
+      "post": {
+        "summary": "Revoke one of your API keys",
+        "description": "Kills a key immediately: the very next request made with it is refused with 401 invalid_api_key. There is no propagation delay and no cache to wait out. You may revoke the key you are authenticating with — that is the correct move when it has leaked, though you will then need another key, or the email flow, to get back in; rotate does both in one call. A key belonging to another account, or to another API, answers 404 exactly as an unknown id does, so this cannot be used to probe for keys you do not own. Idempotent, and free.",
+        "operationId": "postV1KeysIdRevoke",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "revoked"
+                      ]
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-quota-cost": 0
+      }
+    },
+    "/v1/keys/{id}/rotate": {
+      "post": {
+        "summary": "Replace one of your API keys with a new secret",
+        "description": "Issues a replacement key and revokes the old one. This is the answer to a leaked or lost key: the new secret is returned once, the old secret stops working immediately, and the label carries over unless you supply a new one. The replacement is issued at your account's current allowance — your paid plan if you have one — not at the old key's. Rotating does not count against the active-key limit, because it replaces rather than adds. Free, and it works while you are out of quota.",
+        "operationId": "postV1KeysIdRotate",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "apiKey": {
+                      "type": "string",
+                      "description": "The new secret. Shown once."
+                    },
+                    "keyId": {
+                      "type": "string"
+                    },
+                    "replaced": {
+                      "type": "string",
+                      "description": "The id of the key that was revoked."
+                    },
+                    "product": {
+                      "type": "string"
+                    },
+                    "quotaPerPeriod": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "plan": {
+                      "type": "string"
+                    },
+                    "warning": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 60,
+                    "description": "Optional new label. Defaults to the old key's."
+                  }
+                }
+              },
+              "example": {
+                "name": "production (rotated)"
+              }
+            }
+          }
+        },
+        "x-quota-cost": 0
+      }
+    },
+    "/v1/usage": {
+      "get": {
+        "summary": "Your consumption and remaining allowance for this period",
+        "description": "Reports what YOUR ACCOUNT has consumed in the current quota period, the ceiling being enforced against it, and when that ceiling resets. The allowance belongs to the account, not to a key: every key you hold for this API draws on the same budget, so \"used\" is the total across all of them and a new key does not arrive with a fresh one. Free, and it consumes no quota, so it still answers once you are getting 429 quota_exceeded — which is the point: compare \"used\" against \"ceiling\" and read \"period.resetsAt\" to tell a period you have simply exhausted from a plan that is no longer active, which shows as a \"status\" of canceled and a ceiling of 0. \"used\" counts billing units (see \"unit\"), not HTTP requests: a single request can consume several. All money is in integer minor units (cents), never a decimal. The period reported here is the quota period — the calendar month in UTC, resetting at 00:00 UTC on the 1st. Your invoice window is anchored to the date you subscribed and is a different window; the amounts here are what this period’s usage has accrued so far, not a bill.",
+        "operationId": "getV1Usage",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "product": {
+                      "type": "string",
+                      "description": "The API this key is bound to. A key works only on one."
+                    },
+                    "tier": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "The plan tier you are billed on, e.g. \"developer\". Null on a free sandbox key with no paid plan."
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "sandbox",
+                        "active",
+                        "past_due",
+                        "canceled"
+                      ],
+                      "description": "State of your plan. \"sandbox\" means no paid plan; \"canceled\" explains a ceiling of 0."
+                    },
+                    "unit": {
+                      "type": "string",
+                      "description": "The billing unit this API meters. \"used\", \"included\", \"ceiling\" and \"remaining\" are all counted in these, not in requests."
+                    },
+                    "period": {
+                      "type": "object",
+                      "description": "The quota period: the calendar month in UTC.",
+                      "properties": {
+                        "start": {
+                          "type": "string",
+                          "format": "date-time",
+                          "description": "00:00 UTC on the 1st of the current month."
+                        },
+                        "resetsAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "description": "When \"used\" returns to 0 — 00:00 UTC on the 1st of next month."
+                        }
+                      }
+                    },
+                    "included": {
+                      "type": "integer",
+                      "description": "Units your flat monthly fee already covers, before overage pricing applies. 0 without a paid plan."
+                    },
+                    "used": {
+                      "type": "integer",
+                      "description": "Units your account has consumed so far this period, summed across every key you hold for this API."
+                    },
+                    "ceiling": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "description": "The hard limit enforced against your ACCOUNT: requests on any of its keys are refused once the total passes it. Null means unlimited."
+                    },
+                    "remaining": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "description": "ceiling minus used, never below 0. Null when the ceiling is unlimited."
+                    },
+                    "overageSoFarMinor": {
+                      "type": "integer",
+                      "description": "What this period’s usage beyond \"included\" has accrued, in minor units, before your spend cap is applied. 0 without a paid plan."
+                    },
+                    "spendCapMinor": {
+                      "type": "integer",
+                      "description": "The most the overage part of one period can ever cost you, in minor units. Your flat base fee is separate and is never capped away."
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "description": "Quote this when reporting a problem."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-quota-cost": 0
+      }
+    },
+    "/v1/subscription": {
+      "get": {
+        "summary": "Your current plan, billing window and available changes (dashboard session required)",
+        "description": "Reports the plan this account is on, the billing window it is in, any tier change already staged for the next invoice, and the full pricing ladder marked up so you can see which rungs are an upgrade and which a downgrade. `planChangesGoThrough` is the field to branch on: `self_serve` means POST /v1/subscription/plan can move you; `provider_managed` means Square’s own recurring subscription holds your price and neither this API nor a new checkout can move it — buying again would create a SECOND Square subscription and charge you twice; `checkout` appears only when you have no plan at all, where starting one is exactly right. All money is in integer minor units (cents). AUTHENTICATION IS YOUR DASHBOARD SESSION, NOT AN API KEY. Send the `@sp/core` session cookie this API sets when you sign in, from the same origin. An API key is refused here on purpose: it is a data-plane credential that lives in CI and in third-party integrations, and it must never be able to change what you are billed, cancel your account, or read your payment history. Errors: 401 `unauthenticated` when there is no valid session, 403 `forbidden` when the request is cross-origin or its `x-csrf-token` header is missing or wrong.",
+        "operationId": "getV1Subscription",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "product": {
+                      "type": "string"
+                    },
+                    "subscribed": {
+                      "type": "boolean",
+                      "description": "False when this account has never had a paid plan on this API."
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "sandbox",
+                        "active",
+                        "past_due",
+                        "canceled"
+                      ],
+                      "description": "\"sandbox\" when there is no paid plan at all — the same vocabulary GET /v1/usage reports."
+                    },
+                    "plan": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "description": "The tier in force right now."
+                    },
+                    "pendingPlan": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "description": "A tier change already staged, applied when the current window is invoiced."
+                    },
+                    "planChangesGoThrough": {
+                      "type": "string",
+                      "enum": [
+                        "self_serve",
+                        "provider_managed",
+                        "checkout"
+                      ],
+                      "description": "`self_serve` — POST /v1/subscription/plan moves you. `provider_managed` — Square holds your recurring price; the tier cannot be moved from here and starting a new checkout would duplicate the subscription. `checkout` — no plan yet, so POST /v1/checkout is where one starts."
+                    },
+                    "baseFeeOwner": {
+                      "type": "string",
+                      "enum": [
+                        "internal",
+                        "provider"
+                      ],
+                      "description": "Who collects the flat monthly fee: us, or Square’s own recurring subscription."
+                    },
+                    "cancellation": {
+                      "type": "object",
+                      "description": "What cancelling would do, stated before you do it."
+                    },
+                    "tiers": {
+                      "type": "array",
+                      "description": "The published ladder, each rung marked current / upgrade / downgrade."
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-quota-cost": 0
+      }
+    },
+    "/v1/subscription/plan": {
+      "post": {
+        "summary": "Upgrade or downgrade to another plan (dashboard session required)",
+        "description": "Moves this account to another rung of the published pricing ladder and re-derives the ceiling enforced against every API key on it, so an upgrade is usable immediately rather than at the next invoice. The change is STAGED, not overwritten: the current billing window is closed at this instant and priced against the tier that was actually in force for it, and the incoming tier opens the next window with the original billing anniversary preserved. A downgrade therefore never re-prices days you already consumed on the dearer plan. Refused with 409 `conflict` (`details.reason` `provider_owned_base_fee`) when Square’s own recurring subscription holds your price (`baseFeeOwner` is `provider`) — read `planChangesGoThrough` from GET /v1/subscription first. That case cannot be moved from here at all: this API holds no Square subscription of yours to change, and POST /v1/checkout would create a SECOND one and charge you for both. Cancel with Square and buy the tier you want, or contact support. AUTHENTICATION IS YOUR DASHBOARD SESSION, NOT AN API KEY. Send the `@sp/core` session cookie this API sets when you sign in, from the same origin. An API key is refused here on purpose: it is a data-plane credential that lives in CI and in third-party integrations, and it must never be able to change what you are billed, cancel your account, or read your payment history. Errors: 401 `unauthenticated` when there is no valid session, 403 `forbidden` when the request is cross-origin or its `x-csrf-token` header is missing or wrong.",
+        "operationId": "postV1SubscriptionPlan",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "changed": {
+                      "type": "boolean"
+                    },
+                    "direction": {
+                      "type": "string",
+                      "enum": [
+                        "upgrade",
+                        "downgrade"
+                      ]
+                    },
+                    "from": {
+                      "type": "string"
+                    },
+                    "to": {
+                      "type": "string"
+                    },
+                    "entitlement": {
+                      "type": "object",
+                      "description": "The ceiling now enforced on this account’s keys, and when it took effect."
+                    },
+                    "billing": {
+                      "type": "object",
+                      "description": "Which tier the closed window is priced against, and when the new one starts."
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "planId"
+                ],
+                "properties": {
+                  "planId": {
+                    "type": "string",
+                    "description": "Tier id from GET /v1/subscription `tiers[].id`, e.g. \"growth\"."
+                  }
+                }
+              },
+              "example": {
+                "planId": "growth"
+              }
+            }
+          }
+        },
+        "x-quota-cost": 0
+      }
+    },
+    "/v1/subscription/cancel": {
+      "post": {
+        "summary": "Cancel this plan and end metered access (dashboard session required)",
+        "description": "Cancels the plan and drops every API key on this account for this product to a ceiling of 0, so access ends at the moment you cancel rather than at some later date nothing would enforce. The window you cancel in is closed and invoiced first, prorated to that instant: the elapsed share of the base fee plus any overage you accrued, still under the same spend cap. The invoice it writes is returned as `finalInvoice` and appears in GET /v1/invoices. When Square’s own recurring subscription collects your flat monthly fee (`baseFeeOwner` is `provider`) this API cannot stop that charge, so the request is refused with 409 unless you send `acknowledgeProviderBilling: true` — that flag exists so nobody ends up with a ceiling of zero and a live monthly charge without having been told first. AUTHENTICATION IS YOUR DASHBOARD SESSION, NOT AN API KEY. Send the `@sp/core` session cookie this API sets when you sign in, from the same origin. An API key is refused here on purpose: it is a data-plane credential that lives in CI and in third-party integrations, and it must never be able to change what you are billed, cancel your account, or read your payment history. Errors: 401 `unauthenticated` when there is no valid session, 403 `forbidden` when the request is cross-origin or its `x-csrf-token` header is missing or wrong.",
+        "operationId": "postV1SubscriptionCancel",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "canceled": {
+                      "type": "boolean"
+                    },
+                    "canceledAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "entitlement": {
+                      "type": "object",
+                      "description": "The ceiling now enforced. 0 — access has ended."
+                    },
+                    "money": {
+                      "type": "object",
+                      "description": "Exactly what happens to the charges, per base-fee owner."
+                    },
+                    "finalInvoice": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "description": "The invoice written for the window you cancelled in, or null when nothing had accrued."
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "acknowledgeProviderBilling": {
+                    "type": "boolean",
+                    "description": "Required only when `baseFeeOwner` is `provider`: confirms you understand Square will keep charging the monthly fee until you stop it there."
+                  }
+                }
+              },
+              "example": {
+                "acknowledgeProviderBilling": true
+              }
+            }
+          }
+        },
+        "x-quota-cost": 0
+      }
+    },
+    "/v1/invoices": {
+      "get": {
+        "summary": "Every invoice issued against this account, newest first (dashboard session required)",
+        "description": "Returns the stored `api_plan_invoices` rows for this account and this API — the rows the billing run actually wrote, never a reconstruction. Each one reconciles against itself: the included allowance and base fee shown are the PRORATED figures applied to that window, `overageMinorRaw` is the uncapped overage and `overageMinorCapped` is what was charged, and `baseChargedMinor` says how much of the base fee this invoice collected — 0 when Square’s recurring subscription had already taken it. An account with no billing history yet gets an empty list and a `note` explaining why, never a fabricated row. AUTHENTICATION IS YOUR DASHBOARD SESSION, NOT AN API KEY. Send the `@sp/core` session cookie this API sets when you sign in, from the same origin. An API key is refused here on purpose: it is a data-plane credential that lives in CI and in third-party integrations, and it must never be able to change what you are billed, cancel your account, or read your payment history. Errors: 401 `unauthenticated` when there is no valid session, 403 `forbidden` when the request is cross-origin or its `x-csrf-token` header is missing or wrong.",
+        "operationId": "getV1Invoices",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "product": {
+                      "type": "string"
+                    },
+                    "count": {
+                      "type": "integer"
+                    },
+                    "note": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Present only when the list is empty: says why, in a sentence a customer can act on."
+                    },
+                    "invoices": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-quota-cost": 0
+      }
+    },
+    "/v1/payments": {
+      "get": {
+        "summary": "Every payment attempted against this account and how it went (dashboard session required)",
+        "description": "The money movements behind your invoices, newest first: what was charged, whether it succeeded, and the processor’s payment id when it did. A billing period that came to nothing produces NO row here — it was closed without asking the processor for anything, and listing it would show you a payment that never happened. A failed attempt does appear, with its reason, because that is why an account goes past due. AUTHENTICATION IS YOUR DASHBOARD SESSION, NOT AN API KEY. Send the `@sp/core` session cookie this API sets when you sign in, from the same origin. An API key is refused here on purpose: it is a data-plane credential that lives in CI and in third-party integrations, and it must never be able to change what you are billed, cancel your account, or read your payment history. Errors: 401 `unauthenticated` when there is no valid session, 403 `forbidden` when the request is cross-origin or its `x-csrf-token` header is missing or wrong.",
+        "operationId": "getV1Payments",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "product": {
+                      "type": "string"
+                    },
+                    "count": {
+                      "type": "integer"
+                    },
+                    "note": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "payments": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "amountMinor": {
+                            "type": "integer"
+                          },
+                          "outcome": {
+                            "type": "string",
+                            "enum": [
+                              "paid",
+                              "failed",
+                              "pending"
+                            ]
+                          },
+                          "providerPaymentId": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "failureReason": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-quota-cost": 0
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "apiKey": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Your API key. Create one free at POST /v1/keys. Also accepted as the x-api-key header."
+      },
+      "sessionCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "sp_session",
+        "description": "The dashboard session cookie, set when you sign in and sent automatically by the browser from the same origin. HttpOnly, so it cannot be read or set by script; revoked by POST /auth/logout. An API key is not accepted on any endpoint that requires this."
+      },
+      "csrfToken": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-csrf-token",
+        "description": "CSRF token for a state-changing request on the account surface. Read it from the dashboard payload and send it with the session cookie, from the same origin. Missing, wrong or cross-origin is refused with 403 `forbidden`."
+      },
+      "hubSignature": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-hub-signature",
+        "description": "Machine-to-machine only. HMAC-SHA256 over `${x-hub-timestamp}.${rawBody}` with the shared hub secret, inside a 5-minute replay window. Not callable by API consumers; documented so the integration is auditable."
+      }
+    },
+    "responses": {
+      "Error": {
+        "description": "Deterministic error. Branch on `code`; quote `requestId` when reporting a problem.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "required": [
+                "error"
+              ],
+              "properties": {
+                "error": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "invalid_api_key",
+                        "missing_api_key",
+                        "quota_exceeded",
+                        "rate_limited",
+                        "invalid_request",
+                        "not_found",
+                        "method_not_allowed",
+                        "payload_too_large",
+                        "conflict",
+                        "internal_error"
+                      ]
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "object",
+                      "additionalProperties": true
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

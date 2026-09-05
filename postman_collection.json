@@ -1,0 +1,591 @@
+{
+  "info": {
+    "name": "Agent Mandate API",
+    "description": "Convert user intent into signed mandates and verify consequential agent actions against mandate, policy and approvals.\n\n## Getting started\n\n1. Run **Create a free sandbox API key** — it needs no auth and emails a one-time claim token.\n2. Retrieve that token from the email and run `POST /v1/keys/claim`.\n3. Copy the claim response's `apiKey` into the collection's `apiKey` variable.\n4. Every API-key-authenticated request then works as-is.\n\nGenerated from the current service route contract.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{apiKey}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://agentmandate-api.com",
+      "type": "string"
+    },
+    {
+      "key": "apiKey",
+      "value": "",
+      "type": "string",
+      "description": "Paste the key returned by POST /v1/keys/claim."
+    }
+  ],
+  "item": [
+    {
+      "name": "Liveness and deployed version",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "health"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Service index — endpoints, auth and error format",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": []
+        }
+      }
+    },
+    {
+      "name": "Issue a signed mandate",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "content-type",
+            "value": "application/json"
+          },
+          {
+            "key": "authorization",
+            "value": "Bearer {{apiKey}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/v1/mandates",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "v1",
+            "mandates"
+          ]
+        },
+        "description": "Signs a grant of authority to an agent and returns the mandate with a detached HMAC-SHA256 signature over its canonical bytes. The document is self-contained — store it wherever you like and present it on every verification. The signing key is per-account and never leaves the service, so a mandate signed for one account cannot verify under another.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"principal\": \"user_8814\",\n  \"agent\": \"agent_procurement_v3\",\n  \"expiresAt\": \"2026-12-31T23:59:59Z\",\n  \"currency\": \"USD\",\n  \"totalSpendCapMinor\": 500000,\n  \"grants\": [\n    {\n      \"action\": \"payments.transfer\",\n      \"resources\": [\n        \"vendor.acme\",\n        \"vendor.globex\"\n      ],\n      \"maxAmountMinor\": 100000,\n      \"approvalRequiredAboveMinor\": 25000\n    },\n    {\n      \"action\": \"invoices.*\",\n      \"maxCount\": 50\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Verify proposed actions against a mandate",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "content-type",
+            "value": "application/json"
+          },
+          {
+            "key": "authorization",
+            "value": "Bearer {{apiKey}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/v1/verify",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "v1",
+            "verify"
+          ]
+        },
+        "description": "Deny-by-default: an action matching no grant is denied. Returns a receipt per action with the decision, the grant that decided it, every violation (not just the first) and a digest that pins the evaluation. Send one \"action\" or up to 500 in \"actions\" — billing is one unit per action verified.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"mandate\": {\n    \"mandate\": {\n      \"id\": \"mnd_…\",\n      \"principal\": \"user_8814\",\n      \"agent\": \"agent_procurement_v3\",\n      \"notBefore\": \"2026-08-31T00:00:00Z\",\n      \"expiresAt\": \"2026-12-31T23:59:59Z\",\n      \"currency\": \"USD\",\n      \"totalSpendCapMinor\": 500000,\n      \"grants\": [\n        {\n          \"action\": \"payments.transfer\",\n          \"resources\": [\n            \"vendor.acme\",\n            \"vendor.globex\"\n          ],\n          \"maxAmountMinor\": 100000,\n          \"approvalRequiredAboveMinor\": 25000\n        },\n        {\n          \"action\": \"invoices.*\",\n          \"maxCount\": 50\n        }\n      ]\n    },\n    \"signature\": \"v1:…\"\n  },\n  \"action\": {\n    \"agent\": \"agent_procurement_v3\",\n    \"action\": \"payments.transfer\",\n    \"resource\": \"vendor.acme\",\n    \"amountMinor\": 30000,\n    \"currency\": \"USD\",\n    \"priorSpendMinor\": 120000\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Revoke a mandate",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "content-type",
+            "value": "application/json"
+          },
+          {
+            "key": "authorization",
+            "value": "Bearer {{apiKey}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/v1/mandates/{id}/revoke",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "v1",
+            "mandates",
+            "{id}",
+            "revoke"
+          ]
+        },
+        "description": "Adds the mandate to your account's revocation list. Idempotent — revoking twice is not an error. Verifications read a briefly cached copy of that list so they never block on the database, so a revocation takes effect within about ten seconds rather than instantly. That window is stated here rather than hidden.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"reason\": \"agent decommissioned\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "List the mandates you have revoked",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "authorization",
+            "value": "Bearer {{apiKey}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/v1/revocations",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "v1",
+            "revocations"
+          ]
+        },
+        "description": "Account-scoped. Useful for reconciling your own records against the list verifications actually consult."
+      }
+    },
+    {
+      "name": "Public demo — issue and verify in one call, without a key",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "content-type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/v1/demo/verify",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "v1",
+            "demo",
+            "verify"
+          ]
+        },
+        "description": "Signs the mandate you describe with a throwaway demo key, then verifies your actions against it. The real engine, capped at 10 actions. Nothing is stored, nothing is metered, and the demo signature is not usable on the authenticated endpoint.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"mandate\": {\n    \"principal\": \"user_8814\",\n    \"agent\": \"agent_procurement_v3\",\n    \"expiresAt\": \"2026-12-31T23:59:59Z\",\n    \"currency\": \"USD\",\n    \"totalSpendCapMinor\": 500000,\n    \"grants\": [\n      {\n        \"action\": \"payments.transfer\",\n        \"resources\": [\n          \"vendor.acme\",\n          \"vendor.globex\"\n        ],\n        \"maxAmountMinor\": 100000,\n        \"approvalRequiredAboveMinor\": 25000\n      },\n      {\n        \"action\": \"invoices.*\",\n        \"maxCount\": 50\n      }\n    ]\n  },\n  \"action\": {\n    \"action\": \"payments.transfer\",\n    \"resource\": \"vendor.acme\",\n    \"amountMinor\": 30000,\n    \"currency\": \"USD\"\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Every violation code the engine can return",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/v1/violations",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "v1",
+            "violations"
+          ]
+        },
+        "description": "Branch on these rather than on the human-readable detail, which may change."
+      }
+    },
+    {
+      "name": "Start a hosted Square checkout for a paid tier",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "content-type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/v1/checkout",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "v1",
+            "checkout"
+          ]
+        },
+        "description": "Returns a Square-hosted payment URL for the requested tier. No API key is needed — a prospect has not got one yet. The email Square collects becomes the account, so a key issued later for the same address inherits the paid quota. Enterprise returns a contact route rather than a payment link. THIS IS THE PATH FOR SOMEONE WHO IS NOT YET PAYING. It starts a NEW Square recurring subscription, so it is refused with 409 `conflict` (`details.reason` `existing_subscription`) when the request carries a dashboard session for an account that already has a live plan on this API — a second subscription would be charged alongside the first, every month, and this API cannot cancel either one. Change tier with POST /v1/subscription/plan, or, when Square collects your base fee, cancel it with Square first.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"tier\": \"developer\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Square billing events, forwarded by the shared hub",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/billing/webhook",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "billing",
+            "webhook"
+          ]
+        },
+        "description": "Machine-to-machine only. The shared Square billing hub POSTs signed events here; the signature is verified over the exact request bytes. Not callable by API consumers — documented so the integration is auditable."
+      }
+    },
+    {
+      "name": "Request a free sandbox API key (sends a verification email)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "content-type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/v1/keys",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "v1",
+            "keys"
+          ]
+        },
+        "description": "Starts self-serve key issuance. A one-time claim token is emailed to the address you supply; POST it to /v1/keys/claim to receive the key. No key is returned here, and the response is the same whether or not that address already has an account — so this endpoint cannot be used to find out who has one. The email is verified because your account, your usage and your invoice are all keyed to it: issuing on an unverified address would let anyone mint a working key on your account and spend your allowance. Keep using the same address and a paid plan bought with it raises the keys you already hold rather than issuing new ones. Distributed integrations may identify their discovery surface with the optional source object or x-integration-source header; invalid source values are ignored and never block key issuance.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"you@example.com\",\n  \"name\": \"staging\",\n  \"source\": {\n    \"source\": \"postman\",\n    \"medium\": \"collection\"\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "List your API keys for this API",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "authorization",
+            "value": "Bearer {{apiKey}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/v1/keys",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "v1",
+            "keys"
+          ]
+        },
+        "description": "Every key on YOUR account for this API — label, non-secret prefix, status, when it was created, when it was last used, and what it has consumed this period. Authenticate with any active key on the account; the account is taken from that key, never from a parameter, so this can only ever return your own keys. Keys you hold for other APIs in the portfolio are not listed here. Secrets are not returned and cannot be: only a peppered hash is stored. Free, and consumes no quota."
+      }
+    },
+    {
+      "name": "Exchange an emailed claim token for the API key",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "content-type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/v1/keys/claim",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "v1",
+            "keys",
+            "claim"
+          ]
+        },
+        "description": "Spends the token emailed by POST /v1/keys and returns the key. The key is shown ONCE — only a peppered hash is stored, so it can never be read back; if you lose it, rotate. The key works only on this API, and the allowance it is issued with reflects your account: your paid plan when you have one, the free sandbox allowance when you do not.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"token\": \"EXAMPLE_CLAIM_TOKEN_NOT_A_SECRET\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Revoke one of your API keys",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "authorization",
+            "value": "Bearer {{apiKey}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/v1/keys/{id}/revoke",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "v1",
+            "keys",
+            "{id}",
+            "revoke"
+          ]
+        },
+        "description": "Kills a key immediately: the very next request made with it is refused with 401 invalid_api_key. There is no propagation delay and no cache to wait out. You may revoke the key you are authenticating with — that is the correct move when it has leaked, though you will then need another key, or the email flow, to get back in; rotate does both in one call. A key belonging to another account, or to another API, answers 404 exactly as an unknown id does, so this cannot be used to probe for keys you do not own. Idempotent, and free."
+      }
+    },
+    {
+      "name": "Replace one of your API keys with a new secret",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "content-type",
+            "value": "application/json"
+          },
+          {
+            "key": "authorization",
+            "value": "Bearer {{apiKey}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/v1/keys/{id}/rotate",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "v1",
+            "keys",
+            "{id}",
+            "rotate"
+          ]
+        },
+        "description": "Issues a replacement key and revokes the old one. This is the answer to a leaked or lost key: the new secret is returned once, the old secret stops working immediately, and the label carries over unless you supply a new one. The replacement is issued at your account's current allowance — your paid plan if you have one — not at the old key's. Rotating does not count against the active-key limit, because it replaces rather than adds. Free, and it works while you are out of quota.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"production (rotated)\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Your consumption and remaining allowance for this period",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "authorization",
+            "value": "Bearer {{apiKey}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/v1/usage",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "v1",
+            "usage"
+          ]
+        },
+        "description": "Reports what YOUR ACCOUNT has consumed in the current quota period, the ceiling being enforced against it, and when that ceiling resets. The allowance belongs to the account, not to a key: every key you hold for this API draws on the same budget, so \"used\" is the total across all of them and a new key does not arrive with a fresh one. Free, and it consumes no quota, so it still answers once you are getting 429 quota_exceeded — which is the point: compare \"used\" against \"ceiling\" and read \"period.resetsAt\" to tell a period you have simply exhausted from a plan that is no longer active, which shows as a \"status\" of canceled and a ceiling of 0. \"used\" counts billing units (see \"unit\"), not HTTP requests: a single request can consume several. All money is in integer minor units (cents), never a decimal. The period reported here is the quota period — the calendar month in UTC, resetting at 00:00 UTC on the 1st. Your invoice window is anchored to the date you subscribed and is a different window; the amounts here are what this period’s usage has accrued so far, not a bill."
+      }
+    },
+    {
+      "name": "Your current plan, billing window and available changes (dashboard session required)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/v1/subscription",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "v1",
+            "subscription"
+          ]
+        },
+        "description": "Reports the plan this account is on, the billing window it is in, any tier change already staged for the next invoice, and the full pricing ladder marked up so you can see which rungs are an upgrade and which a downgrade. `planChangesGoThrough` is the field to branch on: `self_serve` means POST /v1/subscription/plan can move you; `provider_managed` means Square’s own recurring subscription holds your price and neither this API nor a new checkout can move it — buying again would create a SECOND Square subscription and charge you twice; `checkout` appears only when you have no plan at all, where starting one is exactly right. All money is in integer minor units (cents). AUTHENTICATION IS YOUR DASHBOARD SESSION, NOT AN API KEY. Send the `@sp/core` session cookie this API sets when you sign in, from the same origin. An API key is refused here on purpose: it is a data-plane credential that lives in CI and in third-party integrations, and it must never be able to change what you are billed, cancel your account, or read your payment history. Errors: 401 `unauthenticated` when there is no valid session, 403 `forbidden` when the request is cross-origin or its `x-csrf-token` header is missing or wrong."
+      }
+    },
+    {
+      "name": "Upgrade or downgrade to another plan (dashboard session required)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "content-type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/v1/subscription/plan",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "v1",
+            "subscription",
+            "plan"
+          ]
+        },
+        "description": "Moves this account to another rung of the published pricing ladder and re-derives the ceiling enforced against every API key on it, so an upgrade is usable immediately rather than at the next invoice. The change is STAGED, not overwritten: the current billing window is closed at this instant and priced against the tier that was actually in force for it, and the incoming tier opens the next window with the original billing anniversary preserved. A downgrade therefore never re-prices days you already consumed on the dearer plan. Refused with 409 `conflict` (`details.reason` `provider_owned_base_fee`) when Square’s own recurring subscription holds your price (`baseFeeOwner` is `provider`) — read `planChangesGoThrough` from GET /v1/subscription first. That case cannot be moved from here at all: this API holds no Square subscription of yours to change, and POST /v1/checkout would create a SECOND one and charge you for both. Cancel with Square and buy the tier you want, or contact support. AUTHENTICATION IS YOUR DASHBOARD SESSION, NOT AN API KEY. Send the `@sp/core` session cookie this API sets when you sign in, from the same origin. An API key is refused here on purpose: it is a data-plane credential that lives in CI and in third-party integrations, and it must never be able to change what you are billed, cancel your account, or read your payment history. Errors: 401 `unauthenticated` when there is no valid session, 403 `forbidden` when the request is cross-origin or its `x-csrf-token` header is missing or wrong.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"planId\": \"growth\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Cancel this plan and end metered access (dashboard session required)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "content-type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/v1/subscription/cancel",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "v1",
+            "subscription",
+            "cancel"
+          ]
+        },
+        "description": "Cancels the plan and drops every API key on this account for this product to a ceiling of 0, so access ends at the moment you cancel rather than at some later date nothing would enforce. The window you cancel in is closed and invoiced first, prorated to that instant: the elapsed share of the base fee plus any overage you accrued, still under the same spend cap. The invoice it writes is returned as `finalInvoice` and appears in GET /v1/invoices. When Square’s own recurring subscription collects your flat monthly fee (`baseFeeOwner` is `provider`) this API cannot stop that charge, so the request is refused with 409 unless you send `acknowledgeProviderBilling: true` — that flag exists so nobody ends up with a ceiling of zero and a live monthly charge without having been told first. AUTHENTICATION IS YOUR DASHBOARD SESSION, NOT AN API KEY. Send the `@sp/core` session cookie this API sets when you sign in, from the same origin. An API key is refused here on purpose: it is a data-plane credential that lives in CI and in third-party integrations, and it must never be able to change what you are billed, cancel your account, or read your payment history. Errors: 401 `unauthenticated` when there is no valid session, 403 `forbidden` when the request is cross-origin or its `x-csrf-token` header is missing or wrong.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"acknowledgeProviderBilling\": true\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Every invoice issued against this account, newest first (dashboard session required)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/v1/invoices",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "v1",
+            "invoices"
+          ]
+        },
+        "description": "Returns the stored `api_plan_invoices` rows for this account and this API — the rows the billing run actually wrote, never a reconstruction. Each one reconciles against itself: the included allowance and base fee shown are the PRORATED figures applied to that window, `overageMinorRaw` is the uncapped overage and `overageMinorCapped` is what was charged, and `baseChargedMinor` says how much of the base fee this invoice collected — 0 when Square’s recurring subscription had already taken it. An account with no billing history yet gets an empty list and a `note` explaining why, never a fabricated row. AUTHENTICATION IS YOUR DASHBOARD SESSION, NOT AN API KEY. Send the `@sp/core` session cookie this API sets when you sign in, from the same origin. An API key is refused here on purpose: it is a data-plane credential that lives in CI and in third-party integrations, and it must never be able to change what you are billed, cancel your account, or read your payment history. Errors: 401 `unauthenticated` when there is no valid session, 403 `forbidden` when the request is cross-origin or its `x-csrf-token` header is missing or wrong."
+      }
+    },
+    {
+      "name": "Every payment attempted against this account and how it went (dashboard session required)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/v1/payments",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "v1",
+            "payments"
+          ]
+        },
+        "description": "The money movements behind your invoices, newest first: what was charged, whether it succeeded, and the processor’s payment id when it did. A billing period that came to nothing produces NO row here — it was closed without asking the processor for anything, and listing it would show you a payment that never happened. A failed attempt does appear, with its reason, because that is why an account goes past due. AUTHENTICATION IS YOUR DASHBOARD SESSION, NOT AN API KEY. Send the `@sp/core` session cookie this API sets when you sign in, from the same origin. An API key is refused here on purpose: it is a data-plane credential that lives in CI and in third-party integrations, and it must never be able to change what you are billed, cancel your account, or read your payment history. Errors: 401 `unauthenticated` when there is no valid session, 403 `forbidden` when the request is cross-origin or its `x-csrf-token` header is missing or wrong."
+      }
+    }
+  ]
+}
