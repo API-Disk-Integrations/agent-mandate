@@ -1,17 +1,19 @@
-name: Stage npm release
+name: Publish initial npm release (N2 bootstrap)
 
 on:
   push:
     tags:
-      - 'npm-v*'
+      - 'npm-v1.0.0'
 
 permissions:
   contents: read
   id-token: write
 
 jobs:
-  stage:
-    if: github.repository_owner == 'API-Disk-Integrations'
+  publish:
+    if: >-
+      github.repository == 'API-Disk-Integrations/agent-mandate' &&
+      github.ref == 'refs/tags/npm-v1.0.0'
     runs-on: ubuntu-latest
     environment: npm-release
     steps:
@@ -21,10 +23,15 @@ jobs:
           node-version: '24.20.0'
           registry-url: 'https://registry.npmjs.org'
           package-manager-cache: false
-      - name: Verify immutable release tag
+      - name: Verify immutable bootstrap identity
         working-directory: packages/typescript
-        run: test "npm-v$(node -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
-      - name: Build and test without lifecycle scripts
+        run: |
+          test "$GITHUB_REPOSITORY" = 'API-Disk-Integrations/agent-mandate'
+          test "$GITHUB_REF" = 'refs/tags/npm-v1.0.0'
+          test "$(node -p "require('./package.json').name")" = 'agent-mandate'
+          test "$(node -p "require('./package.json').version")" = '1.0.0'
+          test "$(npm config get registry)" = 'https://registry.npmjs.org/'
+      - name: Build, test, and reproduce the accepted archive
         working-directory: packages/typescript
         env:
           SOURCE_DATE_EPOCH: '1788572548'
@@ -36,11 +43,17 @@ jobs:
           mkdir -p release-dist
           npm pack --ignore-scripts --pack-destination release-dist
           (cd release-dist && sha256sum -c ../release.sha256)
-      - name: Stage through npm OIDC
+          test "$(sha256sum release-dist/agent-mandate-1.0.0.tgz | cut -d ' ' -f 1)" = 'a6546c783d712372c4d58e30a537744d0f24f77b086377aa37de302a8ce957b2'
+      - name: Publish exact first release with provenance
         working-directory: packages/typescript
-        run: npm stage publish release-dist/*.tgz --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_N2_BOOTSTRAP_TOKEN }}
+        run: |
+          test -n "$NODE_AUTH_TOKEN"
+          npm publish release-dist/agent-mandate-1.0.0.tgz --access public --provenance --ignore-scripts
 
-# No NODE_AUTH_TOKEN or registry secret is permitted. This workflow is for an
-# existing npm package after its owner-controlled 2FA first publish. Configure
-# the exact repository, filename release-npm.yml, environment npm-release, and
-# stage-only allowed action in npm Trusted Publishing before running it.
+# This is a one-release replacement for the accepted stage-only workflow.
+# It is not eligible to enter the repository until the separately recorded N2
+# credential-scope exception, one-operation release authorization, current
+# provider/name preflight, and independent final-byte audit all pass. After any
+# terminal result, delete the environment secret and revoke the npm token.
