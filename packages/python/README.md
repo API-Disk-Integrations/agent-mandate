@@ -9,7 +9,7 @@ construction perform no network request.
 ## Install
 
 ```sh
-python -m pip install agent-mandate
+python -m pip install the-agent-mandate
 ```
 
 ## Authenticated client

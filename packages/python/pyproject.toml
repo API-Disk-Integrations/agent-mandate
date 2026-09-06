@@ -3,7 +3,7 @@ requires = ["hatchling==1.32.0"]
 build-backend = "hatchling.build"
 
 [project]
-name = "agent-mandate"
+name = "the-agent-mandate"
 version = "1.0.0"
 description = "Convert user intent into signed mandates and verify consequential agent actions against mandate, policy and approvals."
 readme = "README.md"
