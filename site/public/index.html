@@ -1,0 +1,571 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Mandate API: the authority an agent has, in writing</title>
+<meta name="description" content="Check any agent action against a signed mandate and get back allowed, denied or needs-a-human, with the clause that decided it and an auditable digest.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23176067'/></svg>">
+<style>:root{--brand-50:#ECF5F6;--brand-300:#8FD0D6;--brand-600:#1B727A;--brand-700:#176067;--brand-800:#124C52;--brand-900:#0D383C;--accent:#A12E23;}</style>
+<link rel="stylesheet" href="/base.css">
+<style>
+/* Page-scoped components. Design tokens only — no raw colour values (spec 28). */
+.section-lede { color: var(--ink-2); font-size: var(--t-md); }
+.pain h3 { margin-bottom: var(--s2); }
+.pain p  { color: var(--ink-2); font-size: var(--t-base); }
+
+.chain { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3);
+         margin: 0 0 var(--s6); padding: 0; list-style: none; }
+.chain .step { font: 700 var(--t-xs)/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+            letter-spacing: .04em; text-transform: uppercase; color: var(--brand-800);
+            background: var(--brand-50); border: 1px solid var(--brand-300);
+            border-radius: 999px; padding: 4px 12px; }
+.chain .arrow { color: var(--ink-3); font-weight: 700; }
+
+.flow { display: grid; gap: var(--s4); grid-template-columns: 1fr; margin: 0; padding: 0; list-style: none; }
+.flow li { background: var(--surface); border: 1px solid var(--border);
+           border-left: 3px solid var(--brand-600); border-radius: var(--radius);
+           padding: var(--s4) var(--s5); }
+.flow .stage { display: block; font: 700 var(--t-xs)/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+               letter-spacing: .08em; color: var(--brand-700); margin-bottom: var(--s2); }
+.flow h3 { font-size: var(--t-md); margin-bottom: var(--s1); }
+.flow p  { color: var(--ink-2); font-size: var(--t-sm); }
+
+.cost { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s5); }
+.cost li { display: grid; gap: var(--s2) var(--s4); grid-template-columns: 1fr;
+           padding-bottom: var(--s5); border-bottom: 1px solid var(--border); }
+.cost li:last-child { padding-bottom: 0; border-bottom: 0; }
+.cost .tag { justify-self: start; font: 700 var(--t-xs)/1.5 ui-sans-serif, system-ui, sans-serif;
+             letter-spacing: .08em; text-transform: uppercase; color: var(--brand-800);
+             background: var(--brand-50); border: 1px solid var(--brand-300);
+             border-radius: 999px; padding: 2px 10px; }
+.cost strong { display: block; font-size: var(--t-md); margin-bottom: var(--s1); }
+.cost p { color: var(--ink-2); font-size: var(--t-sm); }
+
+.out-full { max-height: none; }
+.links-inline { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s5);
+                margin-top: var(--s4); font-size: var(--t-sm); color: var(--ink-3); }
+.links-inline a { word-break: break-all; }
+
+/* Three decisions, as a table — the state machine an integrator codes against. */
+.decisions { width: 100%; border-collapse: collapse; font-size: var(--t-sm); }
+.decisions th, .decisions td { text-align: left; padding: var(--s3) var(--s4);
+                               border-bottom: 1px solid var(--border); vertical-align: top; }
+.decisions thead th { font-size: var(--t-xs); letter-spacing: .08em; text-transform: uppercase;
+                      color: var(--ink-3); font-weight: 600; }
+.decisions td:first-child { white-space: nowrap; }
+.decisions td:nth-child(2) { color: var(--ink-2); }
+.decisions td:last-child { color: var(--ink-2); }
+.table-scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+
+.codes { columns: 1; margin: 0; padding: 0; list-style: none; font-size: var(--t-sm); }
+.codes li { break-inside: avoid; padding: var(--s2) 0; color: var(--ink-2); }
+.codes code { color: var(--brand-800); font-weight: 600; }
+@media (min-width: 700px) { .codes { columns: 2; column-gap: var(--s7); } }
+
+@media (min-width: 640px) {
+  .flow { grid-template-columns: repeat(2, 1fr); }
+  .cost li { grid-template-columns: 120px 1fr; }
+}
+@media (min-width: 1000px) { .flow { grid-template-columns: repeat(3, 1fr); } }
+</style>
+</head>
+<body>
+<a class="btn" href="#main" style="position:absolute;left:-9999px" onfocus="this.style.left='8px';this.style.top='8px';this.style.position='fixed';this.style.zIndex='99'">Skip to content</a>
+
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="/"><span class="dot"></span>Agent Mandate</a>
+    <nav>
+      <a href="#solution" class="nav-hide">How it works</a>
+      <a href="#api" class="nav-hide">API</a>
+      <a href="/use-cases/ai-agent-action-authorization-api" class="nav-hide">Use case</a>
+      <a href="#pricing">Pricing</a>
+      <a href="/docs" class="nav-hide">Docs</a>
+      <a class="btn btn-primary" style="min-height:36px;font-size:14px" href="#get-key" data-ev="header_cta">Get Free API Key</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+
+<!-- ===== HERO ========================================================== -->
+<section class="hero">
+    <!-- Decorative. Colour is var(--brand-700) via base.css; see .hero-waves there. -->
+    <div class="hero-waves" aria-hidden="true">
+      <svg viewBox="0 0 1200 560" preserveAspectRatio="xMinYMin meet" focusable="false">
+        <g class="hw hw1"><g class="hw-d">
+          <path class="sheet" d="M 0 198 C 150 246 330 292 520 234 C 700 176 880 142 1200 168 L 1200 560 L 0 560 Z"></path>
+          <path class="fold" d="M 0 198 C 150 246 330 292 520 234 C 700 176 880 142 1200 168"></path>
+          <path class="crease" d="M 0 198 C 150 246 330 292 520 234 C 700 176 880 142 1200 168"></path>
+        </g></g>
+        <g class="hw hw2"><g class="hw-d">
+          <path class="sheet" d="M 0 284 C 150 330 330 376 520 318 C 700 260 880 226 1200 252 L 1200 560 L 0 560 Z"></path>
+          <path class="fold" d="M 0 284 C 150 330 330 376 520 318 C 700 260 880 226 1200 252"></path>
+          <path class="crease" d="M 0 284 C 150 330 330 376 520 318 C 700 260 880 226 1200 252"></path>
+        </g></g>
+        <g class="hw hw3"><g class="hw-d">
+          <path class="sheet" d="M 0 374 C 150 420 330 466 520 408 C 700 350 880 316 1200 340 L 1200 560 L 0 560 Z"></path>
+          <path class="fold" d="M 0 374 C 150 420 330 466 520 408 C 700 350 880 316 1200 340"></path>
+          <path class="crease" d="M 0 374 C 150 420 330 466 520 408 C 700 350 880 316 1200 340"></path>
+        </g></g>
+        <g class="hw hw4"><g class="hw-d">
+          <path class="sheet" d="M 0 460 C 150 506 330 552 520 494 C 700 436 880 402 1200 428 L 1200 560 L 0 560 Z"></path>
+          <path class="fold" d="M 0 460 C 150 506 330 552 520 494 C 700 436 880 402 1200 428"></path>
+          <path class="crease" d="M 0 460 C 150 506 330 552 520 494 C 700 436 880 402 1200 428"></path>
+        </g></g>
+      </svg>
+    </div>
+
+  <div class="wrap hero-grid">
+    <div>
+      <span class="eyebrow">AGENT AUTHORIZATION API</span>
+      <h1 style="margin-top:12px">Your agent is about to move money. What exactly was it allowed to do?</h1>
+      <p class="lede read">Agent Mandate turns that answer into a signed document instead of a prompt. You issue a mandate: this agent, these actions, these resources, this ceiling, until this date. Every consequential action is checked against it and comes back allowed, denied, or needing a human, with the clause that decided and a digest you can put in an audit log.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="#get-key" data-ev="hero_cta">Get Free API Key</a>
+        <a class="btn btn-secondary" href="#example" data-ev="example_click">See a decision receipt</a>
+      </div>
+      <div class="hero-meta">
+        <span>Free tier: <b>500 verified actions</b>/month</span>
+        <span>Paid from <b>$299/month</b></span>
+        <span><b>No card</b> to run the demo</span>
+      </div>
+    </div>
+
+    <div class="panel" id="try">
+      <div class="panel-head">
+        <span class="label">Live verification</span>
+        <span class="chip chip-info" id="demo-status">Ready</span>
+      </div>
+      <div class="panel-body">
+        <label class="field" for="demo-in">A mandate and an action. Raise the amount and watch the decision change.</label>
+        <textarea id="demo-in" rows="14" spellcheck="false" aria-describedby="demo-hint">{
+  &quot;mandate&quot;: {
+    &quot;principal&quot;: &quot;user_8814&quot;,
+    &quot;agent&quot;: &quot;agent_procurement_v3&quot;,
+    &quot;expiresAt&quot;: &quot;2026-12-31T23:59:59Z&quot;,
+    &quot;currency&quot;: &quot;USD&quot;,
+    &quot;totalSpendCapMinor&quot;: 500000,
+    &quot;grants&quot;: [
+      { &quot;action&quot;: &quot;payments.transfer&quot;,
+        &quot;resources&quot;: [&quot;vendor.acme&quot;],
+        &quot;maxAmountMinor&quot;: 100000,
+        &quot;approvalRequiredAboveMinor&quot;: 25000 }
+    ]
+  },
+  &quot;action&quot;: {
+    &quot;agent&quot;: &quot;agent_procurement_v3&quot;,
+    &quot;action&quot;: &quot;payments.transfer&quot;,
+    &quot;resource&quot;: &quot;vendor.acme&quot;,
+    &quot;amountMinor&quot;: 30000,
+    &quot;currency&quot;: &quot;USD&quot;
+  }
+}</textarea>
+        <div class="cta-row" style="margin-top:16px">
+          <button class="btn btn-primary" id="demo-run" data-ev="demo_run">Verify this action</button>
+          <button class="btn btn-secondary" id="demo-reset" type="button">Reset</button>
+        </div>
+        <p class="hint" id="demo-hint">Runs the same engine the paid endpoint uses. Nothing is stored and no key is needed.</p>
+        <div style="margin-top:16px"><pre class="out" id="demo-out" aria-live="polite" tabindex="0">Press “Verify this action” to call the live API.</pre></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ===== 1 · PROBLEM =================================================== -->
+<section id="problem" class="sunken">
+  <div class="wrap">
+    <span class="eyebrow">The problem</span>
+    <h2 style="margin:12px 0 16px;max-width:760px">The agent’s authority exists only in a prompt, and a prompt is not a control.</h2>
+    <p class="read section-lede" style="margin-bottom:32px">The moment an agent can spend money, sign something, or change a production system, “we told it not to” stops being an answer anyone will accept.</p>
+    <div class="grid grid-3 pain">
+      <div class="card">
+        <h3>Instructions aren’t enforcement</h3>
+        <p>“Only pay approved vendors, never above $1,000” lives in the same context window as everything else the model reads. It can be argued with, crowded out, or overridden by content the agent retrieves. Nothing in the stack stops the call.</p>
+      </div>
+      <div class="card">
+        <h3>Your scopes are too coarse to say no</h3>
+        <p>An API key or OAuth scope says <em>this integration may call payments</em>. It cannot say <em>this agent, for this user, up to $1,000, to these three vendors, until Friday</em>. So the permission you actually meant was never expressible.</p>
+      </div>
+      <div class="card">
+        <h3>Afterwards, nobody can reconstruct why</h3>
+        <p>The action happened. Which rule allowed it, what the ceiling was, whether a human approved: all of it is spread across logs, prompts and a model that will not answer the same way twice. That is not an audit trail.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ===== 2 · CONSEQUENCE =============================================== -->
+<section id="consequence">
+  <div class="wrap">
+    <span class="eyebrow">What it costs</span>
+    <h2 style="margin:12px 0 16px;max-width:760px">The first serious incident does not stay a technical problem.</h2>
+    <p class="read section-lede" style="margin-bottom:32px">Autonomy fails asymmetrically. Thousands of correct actions buy you nothing; one wrong consequential action is the whole conversation.</p>
+    <ul class="cost read" style="max-width:820px">
+      <li>
+        <span class="tag">Financial</span>
+        <div>
+          <strong>An action that was never authorized, and no clause that says so</strong>
+          <p>A payment goes to the wrong counterparty at the wrong size. The recovery conversation begins with “what was it permitted to do?”: and the honest answer is a paragraph of English that lived in a prompt template nobody versioned.</p>
+        </div>
+      </li>
+      <li>
+        <span class="tag">Regulatory</span>
+        <div>
+          <strong>You cannot show the control, only describe it</strong>
+          <p>An auditor asks for the authorization boundary in force on a specific date and the evidence it was applied. Reconstructing that from prompt history and application logs is not evidence; it is an argument. Signed mandates and decision receipts are the artefact the question is asking for.</p>
+        </div>
+      </li>
+      <li>
+        <span class="tag">Adoption</span>
+        <div>
+          <strong>The agent gets switched off rather than bounded</strong>
+          <p>Without an enforceable boundary, the only safe setting is a human in front of everything: which removes the reason the agent existed. Teams shelve working automation because they cannot describe its limits to their own risk function.</p>
+        </div>
+      </li>
+    </ul>
+  </div>
+</section>
+
+
+<!-- ===== 3 · SOLUTION ================================================== -->
+<section id="solution" class="sunken">
+  <div class="wrap">
+    <span class="eyebrow">The solution</span>
+    <h2 style="margin:12px 0 16px;max-width:760px">A mandate is a signed document, and verification is deny-by-default.</h2>
+    <p class="read section-lede" style="margin-bottom:24px">The mandate carries everything needed to decide: who granted it, who holds it, which actions on which resources, what ceilings, and when it stops. It is signed with a key that is yours alone and never leaves this service, so it cannot be edited in flight and cannot be replayed against another account.</p>
+    <div class="table-scroll" style="margin-bottom:32px">
+      <table class="decisions">
+        <thead><tr><th>Decision</th><th>What it means</th><th>What your code does</th></tr></thead>
+        <tbody>
+          <tr><td><span class="chip chip-ok">allow</span></td><td>Every clause was satisfied.</td><td>Proceed.</td></tr>
+          <tr><td><span class="chip chip-warn">requires_approval</span></td><td>Authorized in principle, but above the approval threshold. Returned only when approval is the <em>only</em> thing missing.</td><td>Route to a human, then retry with the approval token.</td></tr>
+          <tr><td><span class="chip chip-crit">deny</span></td><td>At least one clause was violated. The receipt lists <em>every</em> one, not the first.</td><td>Do not proceed. Log the receipt: it says exactly why.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="chain">
+      <span class="step">Intent</span><span class="arrow" aria-hidden="true">→</span>
+      <span class="step">Signed mandate</span><span class="arrow" aria-hidden="true">→</span>
+      <span class="step">Proposed action</span><span class="arrow" aria-hidden="true">→</span>
+      <span class="step">Evaluated</span><span class="arrow" aria-hidden="true">→</span>
+      <span class="step">Receipt</span><span class="arrow" aria-hidden="true">→</span>
+      <span class="step">Audit log</span>
+    </p>
+    <ul class="flow">
+      <li>
+        <span class="stage">01</span>
+        <h3>Intent becomes a mandate</h3>
+        <p>You describe what the user actually authorized: the agent, the actions, the resources, per-action and total ceilings in integer minor units, an approval threshold, and an expiry. Anything not written down is not granted.</p>
+      </li>
+      <li>
+        <span class="stage">02</span>
+        <h3>Signed, then self-contained</h3>
+        <p>HMAC-SHA256 over a canonical encoding of the claims, so the same document signs identically on any runtime. Store it wherever you like: verification needs no lookup, so it does not become a database round-trip in your hot path.</p>
+      </li>
+      <li>
+        <span class="stage">03</span>
+        <h3>Every consequential action is checked</h3>
+        <p>Signature, agent binding, validity window, revocation, action, resource, per-action cap, total spend, count limit, currency and approval: all evaluated, none skipped because an earlier one failed.</p>
+      </li>
+      <li>
+        <span class="stage">04</span>
+        <h3>Deny by default</h3>
+        <p>An action matching no grant is denied. Wildcards cover exactly one further segment: <code>payments.*</code> matches <code>payments.transfer</code> but not <code>payments.transfer.bulk</code>, so adding a nested action never silently widens authority.</p>
+      </li>
+      <li>
+        <span class="stage">05</span>
+        <h3>A receipt, not a boolean</h3>
+        <p>The decision, the grant that made it, every violation with a stable code, remaining spend headroom, and a SHA-256 digest over the decision inputs that pins the entry to exactly this evaluation.</p>
+      </li>
+      <li>
+        <span class="stage">06</span>
+        <h3>Revocation when you need it</h3>
+        <p>A signed document cannot un-sign itself, so revocation is the one thing that is looked up. Verifications read a briefly cached list, so a revocation takes effect within about ten seconds: stated plainly rather than hidden behind “immediately”.</p>
+      </li>
+    </ul>
+  </div>
+</section>
+
+
+<!-- ===== 4 · PROOF / EXAMPLE =========================================== -->
+<section id="example">
+  <div class="wrap">
+    <span class="eyebrow">Example receipt</span>
+    <h2 style="margin:12px 0 16px;max-width:760px">This is what a decision looks like when it reaches your code.</h2>
+    <p class="read section-lede" style="margin-bottom:24px">A $300.00 transfer under a mandate that caps single actions at $1,000.00 and requires human approval above $250.00: authorized in principle, held for a human.</p>
+    <pre class="out out-full" tabindex="0">{
+  "<span class="k">decision</span>": "<span class="s">requires_approval</span>",
+  "<span class="k">mandateId</span>": "<span class="s">mnd_e11ce348-36de-4006-a699-dec9fa22e066</span>",
+  "<span class="k">agent</span>": "<span class="s">agent_procurement_v3</span>",
+  "<span class="k">principal</span>": "<span class="s">user_8814</span>",
+  "<span class="k">action</span>": "<span class="s">payments.transfer</span>",
+  "<span class="k">matchedGrant</span>": {
+    "<span class="k">action</span>": "<span class="s">payments.transfer</span>",
+    "<span class="k">resources</span>": ["<span class="s">vendor.acme</span>"],
+    "<span class="k">maxAmountMinor</span>": <span class="n">100000</span>,
+    "<span class="k">approvalRequiredAboveMinor</span>": <span class="n">25000</span>
+  },
+  "<span class="k">matchedGrantIndex</span>": <span class="n">0</span>,
+  "<span class="k">violations</span>": [
+    {
+      "<span class="k">code</span>": "<span class="s">approval_required</span>",
+      "<span class="k">detail</span>": "<span class="s">Actions above 25000 minor units need a human approval token.</span>",
+      "<span class="k">grantIndex</span>": <span class="n">0</span>
+    }
+  ],
+  "<span class="k">remainingSpendMinor</span>": <span class="n">470000</span>,
+  "<span class="k">evaluatedAt</span>": "<span class="s">2026-08-31T05:41:02.118Z</span>",
+  "<span class="k">digest</span>": "<span class="s">9f2c1ba7e4d05c83a1e6f77b0c2d4938a55e1b0c7d3f8e29a4b6c1d05e7f3a82</span>"
+}</pre>
+    <div class="grid grid-3" style="margin-top:32px">
+      <div class="card">
+        <h3>Amounts are integers, always</h3>
+        <p>Every ceiling and every amount is an integer number of minor units. A fractional amount is rejected at validation rather than rounded: a spend cap is the last place in a system where a floating-point cent should be tolerated.</p>
+      </div>
+      <div class="card">
+        <h3>The currency is checked before the number</h3>
+        <p>¥5,000 against a 5,000-cent ceiling would otherwise pass silently. If any cap is monetary, the mandate must name a currency and a mismatched action is denied rather than compared.</p>
+      </div>
+      <div class="card">
+        <h3>Every violation, not the first</h3>
+        <p>An expired mandate presented for an ungranted action reports both. An approval queue needs the whole reason a request failed, not whichever clause the evaluator happened to reach first.</p>
+      </div>
+    </div>
+    <div style="margin-top:32px">
+      <span class="eyebrow">Violation codes</span>
+      <h3 style="margin:12px 0 16px">Branch on the code, never on the message</h3>
+      <ul class="codes read" style="max-width:820px">
+        <li><code>signature_invalid</code>: altered after signing, or signed with a different key</li>
+        <li><code>mandate_expired</code>: evaluated at or after <code>expiresAt</code></li>
+        <li><code>mandate_not_yet_valid</code>: evaluated before <code>notBefore</code></li>
+        <li><code>mandate_revoked</code>: on your account’s revocation list</li>
+        <li><code>agent_mismatch</code>: presented by an agent the mandate does not name</li>
+        <li><code>action_not_granted</code>: no grant covers it; deny by default</li>
+        <li><code>resource_not_granted</code>: action granted, resource not</li>
+        <li><code>amount_exceeds_action_cap</code>: above the matched grant’s ceiling</li>
+        <li><code>amount_exceeds_total_cap</code>: prior spend plus this action exceeds the total</li>
+        <li><code>count_exceeds_cap</code>: the grant’s <code>maxCount</code> is used up</li>
+        <li><code>currency_mismatch</code>: the action is denominated differently from the caps</li>
+        <li><code>approval_required</code>: above the threshold, no token; yields <code>requires_approval</code></li>
+        <li><code>approval_token_invalid</code>: a token was supplied but not recognised</li>
+      </ul>
+    </div>
+    <p class="tier-note" style="margin-top:24px;max-width:760px">This service is newly launched. We publish no uptime percentage, customer count, logo wall or certification claim until we have the operating history to support one.</p>
+  </div>
+</section>
+
+
+<!-- ===== 5 · HOW IT WORKS ============================================== -->
+<section id="how" class="sunken">
+  <div class="wrap">
+    <span class="eyebrow">How it works</span>
+    <h2 style="margin:12px 0 32px">Two calls to put a boundary around an agent</h2>
+    <ul class="steps" style="max-width:820px;margin:0 0 48px;padding:0">
+      <li><div><h3>Issue a mandate</h3><p style="color:var(--ink-2);font-size:15px;margin-top:4px">POST what the user authorized. You get the mandate back with a detached signature. Issuing is free: it does not consume your allowance, because short-lived narrowly-scoped mandates are the ones worth encouraging.</p></div></li>
+      <li><div><h3>Verify before you act</h3><p style="color:var(--ink-2);font-size:15px;margin-top:4px">POST the mandate and the action your agent proposes. One unit per action verified, up to 500 in a single call. Branch on <code>decision</code>; store the receipt.</p></div></li>
+      <li><div><h3>Revoke when it is over</h3><p style="color:var(--ink-2);font-size:15px;margin-top:4px">POST to the revoke endpoint. Idempotent, never billable, and effective within about ten seconds. You should still give every mandate a short <code>expiresAt</code>: revocation is the exception, expiry is the design.</p></div></li>
+    </ul>
+
+    <span class="eyebrow">What the mandate does not do</span>
+    <h3 style="margin:12px 0 8px">It authorizes; it does not execute or remember</h3>
+    <p class="read" style="color:var(--ink-2);font-size:15px">Agent Mandate never touches your payment rails or your systems of record: it returns a decision and your code acts on it. It is also stateless about usage: you pass <code>priorSpendMinor</code> and <code>priorCount</code>, because you are the one who knows what actually completed. A service that guessed at your ledger would be worse than one that asks.</p>
+  </div>
+</section>
+
+
+<!-- ===== 6 · DEVELOPER INTEGRATION ===================================== -->
+<section id="api">
+  <div class="wrap">
+    <span class="eyebrow">Developer integration</span>
+    <h2 style="margin:12px 0 8px">Small surface, versioned, OpenAPI-first</h2>
+    <p class="read section-lede" style="margin-bottom:24px">Authenticate with <code>Authorization: Bearer &lt;key&gt;</code>. Every error returns a stable <code>code</code> and a <code>requestId</code> you can quote.</p>
+    <div class="panel"><div class="panel-body">
+      <div class="ep"><span class="m">POST</span><code>/v1/keys</code><span class="d">Public. Emails a one-time claim token to the address you give it. No key is returned on this call, proving the mailbox is what stops anyone minting a key on your account.</span></div>
+      <div class="ep"><span class="m">POST</span><code>/v1/keys/claim</code><span class="d">Public. Spends the emailed token and returns the key, shown once: 500 verified actions a month, no card.</span></div>
+      <div class="ep"><span class="m">POST</span><code>/v1/mandates</code><span class="d">Issue a signed mandate. Free: issuance is not the billable unit.</span></div>
+      <div class="ep"><span class="m">POST</span><code>/v1/verify</code><span class="d">Verify one action or up to 500. Billed one unit per action verified.</span></div>
+      <div class="ep"><span class="m">POST</span><code>/v1/mandates/:id/revoke</code><span class="d">Revoke. Idempotent, never billable, effective within ~10s.</span></div>
+      <div class="ep"><span class="m">GET</span><code>/v1/revocations</code><span class="d">The revocation list verifications actually consult.</span></div>
+      <div class="ep"><span class="m">POST</span><code>/v1/demo/verify</code><span class="d">Public. Signs and verifies in one call, capped at 10 actions. No key required.</span></div>
+      <div class="ep"><span class="m">GET</span><code>/v1/violations</code><span class="d">Public. Every violation code and decision, with meanings.</span></div>
+    </div></div>
+    <div style="margin-top:24px"><pre class="out" tabindex="0"><span class="k">curl</span> -X POST __API__/v1/verify \
+  -H <span class="s">"Authorization: Bearer $AGENT_MANDATE_KEY"</span> \
+  -H <span class="s">"content-type: application/json"</span> \
+  -d <span class="s">'{"mandate": {"mandate": {...}, "signature": "v1:..."},
+        "action": {"agent":"agent_procurement_v3","action":"payments.transfer",
+                   "resource":"vendor.acme","amountMinor":30000,"currency":"USD"}}'</span></pre></div>
+    <div class="cta-row" style="margin-top:24px">
+      <a class="btn btn-primary" href="/docs" data-ev="docs_click">Read the API reference</a>
+      <a class="btn btn-secondary" href="__API__/openapi.json">OpenAPI specification</a>
+    </div>
+    <p class="links-inline">
+      <span>Python and TypeScript SDKs</span>
+      <span>Service health: <a href="__API__/health">__API__/health</a></span>
+    </p>
+  </div>
+</section>
+
+
+<!-- ===== 7 · PRICING =================================================== -->
+<section id="pricing" class="sunken">
+  <div class="wrap-cm">
+    <span class="eyebrow">Pricing</span>
+    <h2 style="margin:12px 0 8px">Priced per verified action, capped so a runaway agent can’t surprise you</h2>
+    <p class="read section-lede" style="margin-bottom:32px">One unit is one action verified. Issuing and revoking mandates are free. Every plan includes an allowance, then a per-unit overage that is hard-capped per billing period: your worst-case bill is the base price plus the cap, never more.</p>
+    <!--PRICING_TIERS-->
+    <p class="tier-note" style="margin-top:24px">Free tier: 500 verified actions per month, no card. Prices in USD, billed monthly. Payment is processed by Square through our shared billing platform; card details never touch this site.</p>
+    <div class="read" style="margin-top:32px">
+      <details class="faq"><summary>What counts as a verified action?</summary><div class="body">One action in one call to <code>/v1/verify</code>. A batch of 50 actions bills 50 units. Issuing a mandate, revoking one and listing revocations are all free: the unit is the decision, not the paperwork around it.</div></details>
+      <details class="faq"><summary>Where is the mandate stored?</summary><div class="body">Wherever you put it. The signed document is self-contained, so verification needs no lookup and does not become a database round-trip in your hot path. The only thing we store is your account’s signing key and the mandate ids you have revoked.</div></details>
+      <details class="faq"><summary>How fast does a revocation take effect?</summary><div class="body">Within about ten seconds. Verifications read a briefly cached copy of your revocation list so they never block on a database. If you need an instant boundary, use a short <code>expiresAt</code>: expiry is the design, revocation is the exception.</div></details>
+      <details class="faq"><summary>What stops someone replaying a leaked mandate?</summary><div class="body">Three things, and you should use all of them. Supply <code>agent</code> on the action so a mandate presented by a different agent is denied. Keep <code>expiresAt</code> short. Scope grants to specific resources with real ceilings. The signature proves the document is authentic; it does not prove who is holding it.</div></details>
+      <details class="faq"><summary>Does it track how much the agent has already spent?</summary><div class="body">No, deliberately. You pass <code>priorSpendMinor</code> and <code>priorCount</code>, because you are the one who knows which actions actually completed. A service that guessed at your ledger would be worse than one that asks for it.</div></details>
+      <details class="faq"><summary>Can I evaluate it before paying?</summary><div class="body">Yes. The demo at the top of this page is the real engine with no key at all, and the free tier gives you 500 verified actions a month against the full authenticated surface.</div></details>
+    </div>
+  </div>
+</section>
+
+
+<!-- ===== 8 · CTA ======================================================= -->
+<section id="get-key">
+  <div class="wrap" style="text-align:center">
+    <h2 style="margin-bottom:12px">Put the boundary in writing.</h2>
+    <p class="section-lede" style="max-width:620px;margin:0 auto 24px">The free tier is 500 verified actions a month, no card. Create a key, issue a mandate, and the next call tells you exactly what your agent may and may not do.</p>
+    <div class="cta-row" style="justify-content:center">
+      <a class="btn btn-primary" href="/signup" data-ev="final_cta">Get Free API Key</a>
+      <a class="btn btn-secondary" href="#try">Run the live demo</a>
+    </div>
+    <p class="hint" style="max-width:620px;margin:20px auto 0">One email address, no password, no card. Prefer the terminal? The same key, in two calls:</p>
+    <div style="max-width:620px;margin:16px auto 0;text-align:left"><pre class="out" tabindex="0"><span class="k">curl</span> -X POST __API__/v1/keys \
+  -H <span class="s">"content-type: application/json"</span> \
+  -d <span class="s">'{"email":"you@company.com","name":"Evaluation key","source":{"source":"web","medium":"landing"}}'</span>
+
+# 202 Accepted. A one-time token is emailed to that address — spend it,
+# and the response carries the key, shown once.
+
+<span class="k">curl</span> -X POST __API__/v1/keys/claim \
+  -H <span class="s">"content-type: application/json"</span> \
+  -d <span class="s">'{"token":"&lt;token from the email&gt;"}'</span></pre></div>
+  </div>
+</section>
+
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    <div class="cols">
+      <div>
+        <a class="brand" href="/" style="margin-bottom:8px"><span class="dot"></span>Agent Mandate</a>
+        <p style="color:var(--ink-3);font-size:14px;max-width:320px">Signed mandates and deny-by-default verification for consequential agent actions: with the clause that decided, every violation, and a digest you can audit.</p>
+      </div>
+      <div><strong style="font-size:14px">Product</strong><a href="/#problem">The problem</a><a href="/#solution">How it works</a><a href="/#example">Example receipt</a><a href="/#pricing">Pricing</a></div>
+      <div><strong style="font-size:14px">Developers</strong><a href="/docs" data-ev="docs_click">API reference</a><a href="/quickstart">Quickstart</a><a href="/playground">Playground</a><a href="__API__/openapi.json">OpenAPI specification</a><a href="/downloads/agent_mandate.py">Python SDK</a><a href="/downloads/agent_mandate.ts">TypeScript SDK</a><a href="/downloads/postman_collection.json">Postman collection</a><a href="/changelog">Changelog</a></div>
+      <div><strong style="font-size:14px">Company</strong><a href="/status">Service status</a><a href="__API__/health">API health</a><a href="mailto:__CONTACT__">Support</a><a href="mailto:__CONTACT__">Sales</a><a href="/privacy">Privacy policy</a><a href="/terms">Terms of service</a></div>
+    </div>
+    <div class="legal">© 2026 · Payments processed by Square. Prices in USD.</div>
+  </div>
+</footer>
+
+<script>
+const API = "__API__";
+const EP  = "/v1/demo/verify";
+const DEFAULT_IN = document.getElementById('demo-in').value;
+const track = (n, d) => { try { (window.__ev ||= []).push({ n, d, t: Date.now(), ref: document.referrer, q: location.search }); } catch {} };
+document.querySelectorAll('[data-ev]').forEach(el => el.addEventListener('click', () => track(el.dataset.ev, el.dataset.tier || null)));
+track('landing_view');
+
+/* FIRST-TOUCH FORWARDING.
+   The API is a different service on the same origin, so a click from here to
+   /signup arrives with a SAME-ORIGIN referer: the external referrer that
+   actually did the acquiring is gone, and the server records `/signup` as the
+   landing page rather than this one. Neither fact is recoverable later, so
+   carry them on the link. `ref` is a host, `lp` is a path; the server reduces
+   both again and drops anything that does not fit, so this cannot introduce a
+   value the column could not already hold. Nothing is stored in the browser. */
+(() => { try {
+  const q = new URLSearchParams(location.search), p = new URLSearchParams();
+  for (const k of ['utm_source','utm_medium','utm_campaign','utm_content']) {
+    const v = q.get(k); if (v) p.set(k, v);
+  }
+  let ref = ''; try { ref = document.referrer ? new URL(document.referrer).host : ''; } catch {}
+  if (ref && ref !== location.host) p.set('ref', ref);
+  p.set('lp', location.pathname);
+  for (const a of document.querySelectorAll('a[href^="/signup"]')) {
+    const u = new URL(a.getAttribute('href'), location.origin);
+    p.forEach((v, k) => { if (!u.searchParams.has(k)) u.searchParams.set(k, v); });
+    a.setAttribute('href', u.pathname + u.search + u.hash);
+  }
+} catch {} })();
+
+const $in = document.getElementById('demo-in'), $out = document.getElementById('demo-out'),
+      $run = document.getElementById('demo-run'), $st = document.getElementById('demo-status');
+const setStatus = (txt, cls) => { $st.textContent = txt; $st.className = 'chip ' + cls; };
+const paint = (obj) => {
+  const j = JSON.stringify(obj, null, 2)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/"([^"]+)":/g, '"<span class="k">$1</span>":')
+    .replace(/: "([^"]*)"/g, ': "<span class="s">$1</span>"')
+    .replace(/: (-?\d+(\.\d+)?)/g, ': <span class="n">$1</span>');
+  $out.innerHTML = j;
+};
+document.getElementById('demo-reset').addEventListener('click', () => {
+  $in.value = DEFAULT_IN; $out.textContent = 'Press “Verify this action” to call the live API.'; setStatus('Ready','chip-info');
+});
+$run.addEventListener('click', async () => {
+  let payload;
+  try { payload = JSON.parse($in.value); }
+  catch (e) { setStatus('Invalid JSON','chip-crit'); $out.textContent = 'That is not valid JSON:\n\n' + e.message; return; }
+  $run.disabled = true; setStatus('Running…','chip-info'); $out.textContent = 'Calling ' + API + EP + ' …';
+  const started = performance.now();
+  try {
+    const res = await fetch(API + EP, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
+    const body = await res.json();
+    paint(body);
+    const ms = Math.round(performance.now() - started);
+    if (res.ok) {
+      const d = body?.receipts?.[0]?.decision;
+      const cls = d === 'allow' ? 'chip-ok' : d === 'deny' ? 'chip-crit' : 'chip-warn';
+      setStatus((d ?? '200') + ' · ' + ms + ' ms', cls); track('demo_result_ok', d);
+    } else { setStatus(res.status + ' · ' + (body?.error?.code ?? 'error'),'chip-warn'); track('demo_result_error'); }
+  } catch (err) {
+    setStatus('Network error','chip-crit');
+    $out.textContent = 'Could not reach the API.\n\n' + String(err) + '\n\nThe service may be restarting — try again in a moment.';
+  } finally { $run.disabled = false; }
+});
+// --- Pricing CTA -> shared billing platform -------------------------------
+// Posts to the API's /v1/checkout, which calls @sp/commerce's provider-agnostic
+// createCheckout and returns a Square-hosted URL. No Square logic lives here,
+// and no card details ever touch this page (24_SHARED_SQUARE_BILLING_HUB.md).
+document.querySelectorAll('[data-ev="pricing_cta"]').forEach(el => {
+  el.addEventListener('click', async (e) => {
+    const tier = el.dataset.tier;
+    if (!tier || tier === 'enterprise') return; // enterprise is a sales conversation
+    e.preventDefault();
+    const original = el.textContent;
+    el.textContent = 'Starting checkout…';
+    el.setAttribute('aria-disabled', 'true');
+    track('checkout_start', tier);
+    try {
+      const res = await fetch(API + '/v1/checkout', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ tier }),
+      });
+      const body = await res.json();
+      if (res.ok && body.checkoutUrl) { track('checkout_redirect', tier); location.href = body.checkoutUrl; return; }
+      alert(body?.error?.message ?? 'Checkout is unavailable right now. Please try again shortly.');
+    } catch {
+      alert('Could not reach the checkout service. Please try again shortly.');
+    } finally {
+      el.textContent = original;
+      el.removeAttribute('aria-disabled');
+    }
+  });
+});
+</script>
+</body>
+</html>

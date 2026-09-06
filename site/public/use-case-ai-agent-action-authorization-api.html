@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Agent Action Authorization API | Agent Mandate</title>
+<meta name="description" content="Check a proposed consequential AI-agent action against a time-bounded signed mandate, resource and spend limits, and approval requirements before execution.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23176067'/></svg>">
+<style>:root{--brand-50:#ECF5F6;--brand-300:#8FD0D6;--brand-600:#1B727A;--brand-700:#176067;--brand-800:#124C52;--brand-900:#0D383C;--accent:#A12E23;}</style>
+<link rel="stylesheet" href="/base.css">
+<style>
+.intent-hero{padding-block:var(--s8)}.intent-hero .lede,.intent-lede{color:var(--ink-2);font-size:var(--t-md)}.intent-hero .lede{margin:var(--s4) 0 var(--s5)}
+.intent-grid{display:grid;gap:var(--s4)}.intent-grid>*{min-width:0}.intent-card strong{display:block;margin-bottom:var(--s2)}.intent-card p{color:var(--ink-2)}
+.intent-demo{display:grid;gap:var(--s5);align-items:start}.intent-demo>*{min-width:0}.intent-demo textarea{min-height:440px;max-height:720px}
+.intent-actions{display:flex;flex-wrap:wrap;gap:var(--s3);margin-top:var(--s3)}.intent-list{margin:var(--s4) 0 0;padding-left:1.25rem;color:var(--ink-2)}.intent-list li+li{margin-top:var(--s2)}
+.intent-boundary{border-left:4px solid var(--brand-600)}.intent-code{display:block;position:relative}.intent-code pre{white-space:pre-wrap;overflow-wrap:anywhere;padding-right:6.5rem}
+.copy-button{position:absolute;right:var(--s3);top:var(--s3)}.result-grid{display:grid;gap:var(--s4)}.muted{color:var(--ink-2)}
+@media(min-width:760px){.intent-grid,.result-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.intent-demo{grid-template-columns:minmax(0,1.08fr) minmax(0,.92fr)}}
+</style>
+</head>
+<body data-product-id="agent-mandate" data-page-path="/use-cases/ai-agent-action-authorization-api">
+<a class="btn btn-secondary" href="#main" style="position:absolute;left:-9999px" onfocus="this.style.left='8px';this.style.top='8px';this.style.position='fixed';this.style.zIndex='99'">Skip to content</a>
+<header class="site"><div class="wrap">
+  <a class="brand" href="/"><span class="dot"></span>Agent Mandate</a>
+  <nav aria-label="Primary"><a href="#fit" class="nav-hide">Use case</a><a href="#quickstart" class="nav-hide">Quickstart</a><a href="#trust" class="nav-hide">Trust</a><a href="/docs">Docs</a><a class="btn btn-primary" style="min-height:36px;font-size:14px" href="#demo">Run demo</a></nav>
+</div></header>
+
+<main id="main">
+<section class="intent-hero"><div class="wrap">
+  <p class="eyebrow">AI agent action authorization API</p>
+  <h1 style="margin-top:var(--s3);max-width:920px">Decide whether an AI agent may take a consequential action—before it runs</h1>
+  <p class="lede read">For platform, security, AI-governance, and workflow engineering teams placing payments, procurement, account, or data actions behind explicit authority. Verify the proposed action against a signed, expiring mandate and receive an allow, deny, or requires-approval receipt.</p>
+  <div class="cta-row"><a class="btn btn-primary" href="#demo">Run the no-account demo</a><a class="btn btn-secondary" href="/signup" data-signup>Create a sandbox key</a></div>
+  <div class="hero-meta"><span><b>Time-bounded mandate</b></span><span><b>No API key</b> for demo</span><span><b>No action execution</b></span></div>
+</div></section>
+
+<section id="fit" class="sunken"><div class="wrap">
+  <p class="eyebrow">Who this is for and when to use it</p>
+  <h2 style="margin:var(--s3) 0 var(--s5);max-width:840px">A procurement agent proposes a $300 transfer to an approved vendor: it is under the hard cap but over the threshold that requires a human approval.</h2>
+  <div class="intent-grid">
+    <article class="card intent-card"><strong>Best-fit team</strong><p>Platform and security engineers adding a pre-execution authorization boundary to agentic workflows with consequential side effects.</p></article>
+    <article class="card intent-card"><strong>Input</strong><p>Principal, agent identity, expiry, grants, resources, amount limits, approval threshold, and the concrete action being proposed.</p></article>
+    <article class="card intent-card"><strong>Output</strong><p><code>allow</code>, <code>deny</code>, or <code>requires_approval</code>, with stable violation codes and a decision receipt.</p></article>
+    <article class="card intent-card"><strong>Primary-value event</strong><p>After issuing a signed mandate, a successful authenticated <code>POST /v1/verify</code> returning a machine-actionable decision and receipt.</p></article>
+  </div>
+</div></section>
+
+<section id="demo"><div class="wrap">
+  <p class="eyebrow">Interactive keyless demo</p>
+  <h2 style="margin:var(--s3) 0 var(--s4)">Verify a payment action against a bounded mandate</h2>
+  <p class="intent-lede read">The page generates an expiry 24 hours in the future before displaying this fictional request. The demo signs the mandate with a throwaway demo key, runs the production policy engine, stores nothing, and returns a demo-only receipt. Do not paste production mandates, approval tokens, secrets, or personal data.</p>
+  <div class="intent-demo" style="margin-top:var(--s5)">
+    <form class="panel" id="demo-form">
+      <div class="panel-head"><span class="label">Request body</span><span class="chip chip-info" id="demo-status" role="status" aria-live="polite">Ready</span></div>
+      <div class="panel-body">
+        <label class="field" for="demo-in">JSON input</label>
+        <textarea id="demo-in" rows="22" spellcheck="false" aria-describedby="demo-help">{
+  &quot;mandate&quot;: {
+    &quot;principal&quot;: &quot;user_8814&quot;,
+    &quot;agent&quot;: &quot;agent_procurement_v3&quot;,
+    &quot;expiresAt&quot;: &quot;__FUTURE_EXPIRES_AT__&quot;,
+    &quot;currency&quot;: &quot;USD&quot;,
+    &quot;totalSpendCapMinor&quot;: 500000,
+    &quot;grants&quot;: [{
+      &quot;action&quot;: &quot;payments.transfer&quot;,
+      &quot;resources&quot;: [&quot;vendor.acme&quot;],
+      &quot;maxAmountMinor&quot;: 100000,
+      &quot;approvalRequiredAboveMinor&quot;: 25000
+    }]
+  },
+  &quot;action&quot;: {
+    &quot;agent&quot;: &quot;agent_procurement_v3&quot;,
+    &quot;action&quot;: &quot;payments.transfer&quot;,
+    &quot;resource&quot;: &quot;vendor.acme&quot;,
+    &quot;amountMinor&quot;: 30000,
+    &quot;currency&quot;: &quot;USD&quot;
+  }
+}</textarea>
+        <p class="hint" id="demo-help">Schema source: the independently accepted Agent Mandate example and <code>/v1/demo/verify</code> request contract. Amounts are integer minor units.</p>
+        <div class="intent-actions"><button class="btn btn-primary" type="submit" id="demo-run">Verify action</button><button class="btn btn-secondary" type="button" id="demo-reset">Reset</button></div>
+      </div>
+    </form>
+    <div class="panel">
+      <div class="panel-head"><span class="label">Live response</span></div>
+      <div class="panel-body"><pre class="out" id="demo-out" aria-live="polite" tabindex="0">Run the demo to see the unedited API response.</pre>
+      <p class="hint">Look first at the receipt's <code>decision</code> and <code>violations</code>. A keyless demo receipt is not valid on the authenticated endpoint and is not evidence that an external action ran.</p></div>
+    </div>
+  </div>
+</div></section>
+
+<section id="quickstart" class="sunken"><div class="wrap">
+  <p class="eyebrow">Copyable no-account path</p>
+  <h2 style="margin:var(--s3) 0 var(--s4)">Generate a future expiry and run the demo</h2>
+  <p class="read muted">This block needs Python 3 and <code>curl</code>, replaces no credential, and creates a UTC expiry 24 hours ahead so the mandate is valid when you run it.</p>
+  <div class="panel intent-code" style="margin-top:var(--s4)"><button class="btn btn-secondary copy-button" type="button" data-copy-target="noauth-curl">Copy commands</button><pre class="out"><code id="noauth-curl">python3 -c 'import json; from datetime import datetime,timedelta,timezone; print(json.dumps({"mandate":{"principal":"user_8814","agent":"agent_procurement_v3","expiresAt":(datetime.now(timezone.utc)+timedelta(days=1)).isoformat(timespec="seconds").replace("+00:00","Z"),"currency":"USD","totalSpendCapMinor":500000,"grants":[{"action":"payments.transfer","resources":["vendor.acme"],"maxAmountMinor":100000,"approvalRequiredAboveMinor":25000}]},"action":{"agent":"agent_procurement_v3","action":"payments.transfer","resource":"vendor.acme","amountMinor":30000,"currency":"USD"}}))' |
+curl -sS -X POST https://agentmandate-api.com/v1/demo/verify \
+  -H 'content-type: application/json' \
+  --data-binary @-</code></pre></div>
+</div></section>
+
+<section id="expected"><div class="wrap">
+  <p class="eyebrow">Expected contract-shaped result</p>
+  <h2 style="margin:var(--s3) 0 var(--s4)">What first useful value looks like</h2>
+  <div class="result-grid">
+    <div class="panel"><div class="panel-head"><span class="label">Representative response</span></div><div class="panel-body"><pre class="out"><code>{
+  "count": 1,
+  "allowed": 0,
+  "denied": 0,
+  "requiresApproval": 1,
+  "receipts": [{
+    "decision": "requires_approval",
+    "violations": [{"code": "approval_required"}],
+    "digest": "sha256:example_receipt_digest"
+  }],
+  "requestId": "req_example"
+}</code></pre><p class="hint">The digest and request ID vary. The decision, counters, violation code, and receipt structure are the contract-shaped result to consume.</p></div></div>
+    <article class="card intent-card"><strong>First useful result</strong><p><code>requires_approval</code> means the grant matches the action and resource, but <code>amountMinor: 30000</code> exceeds the mandate's <code>approvalRequiredAboveMinor: 25000</code>.</p><strong style="margin-top:var(--s4)">Interpretation</strong><p>Your caller can branch safely: execute only on <code>allow</code>, stop on <code>deny</code>, and route <code>requires_approval</code> to your own approval system. The API does not execute the transfer.</p></article>
+  </div>
+</div></section>
+
+<section id="auth" class="sunken"><div class="wrap">
+  <p class="eyebrow">Authenticated first-value path</p>
+  <h2 style="margin:var(--s3) 0 var(--s4)">Verify the account, issue a real signed mandate, then verify its action</h2>
+  <ol class="steps read">
+    <li><div><strong>Request and claim a product-scoped key.</strong><p class="hint">Replace only the email and one-time email token, then keep the returned API key out of source control.</p></div></li>
+    <li><div><strong>Issue a signed mandate with <code>/v1/mandates</code>.</strong><p class="hint">The copied command generates a future expiry. Capture the exact returned mandate and signature; do not fabricate or edit them.</p></div></li>
+    <li><div><strong>Verify that exact signed object at <code>/v1/verify</code>.</strong><p class="hint">A successful decision receipt is the primary-value event. Key issuance or mandate creation alone is not activation.</p></div></li>
+  </ol>
+  <div class="panel intent-code" style="margin-top:var(--s5)"><button class="btn btn-secondary copy-button" type="button" data-copy-target="auth-curl">Copy commands</button><pre class="out"><code id="auth-curl">curl -sS -X POST https://agentmandate-api.com/v1/keys \
+  -H 'content-type: application/json' \
+  -d '{"email":"you@example.com","source":{"source":"product_site","medium":"exact_intent","campaign":"search-agent-mandate-exact-intent-v1","content":"ai-agent-action-authorization-api-v1"}}'
+
+curl -sS -X POST https://agentmandate-api.com/v1/keys/claim \
+  -H 'content-type: application/json' \
+  -d '{"token":"PASTE_ONE_TIME_TOKEN_FROM_EMAIL"}'
+
+export KEY='PASTE_API_KEY_FROM_CLAIM_RESPONSE'
+
+MANDATE_JSON="$(python3 -c 'import json; from datetime import datetime,timedelta,timezone; print(json.dumps({"principal":"user_8814","agent":"agent_procurement_v3","expiresAt":(datetime.now(timezone.utc)+timedelta(days=1)).isoformat(timespec="seconds").replace("+00:00","Z"),"currency":"USD","totalSpendCapMinor":500000,"grants":[{"action":"payments.transfer","resources":["vendor.acme"],"maxAmountMinor":100000,"approvalRequiredAboveMinor":25000}]}))')"
+
+SIGNED_MANDATE="$(curl -sS -X POST https://agentmandate-api.com/v1/mandates \
+  -H "Authorization: Bearer $KEY" \
+  -H 'content-type: application/json' \
+  -d "$MANDATE_JSON")"
+
+VERIFY_BODY="$(printf '%s' "$SIGNED_MANDATE" | python3 -c 'import json,sys; signed=json.load(sys.stdin); print(json.dumps({"mandate":{"mandate":signed["mandate"],"signature":signed["signature"]},"action":{"agent":"agent_procurement_v3","action":"payments.transfer","resource":"vendor.acme","amountMinor":30000,"currency":"USD"}}))')"
+
+curl -sS -X POST https://agentmandate-api.com/v1/verify \
+  -H "Authorization: Bearer $KEY" \
+  -H 'content-type: application/json' \
+  -d "$VERIFY_BODY"</code></pre></div>
+</div></section>
+
+<section id="next"><div class="wrap">
+  <p class="eyebrow">After the example works</p>
+  <h2 style="margin:var(--s3) 0 var(--s4)">Put verification immediately before one controlled side effect</h2>
+  <ol class="steps read">
+    <li><div><strong>Model one narrow grant.</strong><p class="hint">Name the concrete action and resource; add the smallest useful amount, count, expiry, and approval limits.</p></div></li>
+    <li><div><strong>Branch on the receipt.</strong><p class="hint">Allow only an <code>allow</code> decision. Send <code>requires_approval</code> to your human workflow and stop on <code>deny</code>.</p></div></li>
+    <li><div><strong>Retain the receipt with your action audit.</strong><p class="hint">Track prior spend and counts in your own system, then verify again for each proposed action. Mandates are stateless.</p></div></li>
+  </ol>
+</div></section>
+
+<section id="errors" class="sunken"><div class="wrap">
+  <p class="eyebrow">Troubleshooting</p>
+  <h2 style="margin:var(--s3) 0 var(--s5)">The three most likely blockers</h2>
+  <div class="intent-grid">
+    <article class="card intent-card"><strong><code>401</code> unauthorized</strong><p>Use the API key returned once by <code>/v1/keys/claim</code>, not the email claim token. Send it exactly as <code>Authorization: Bearer $KEY</code>.</p></article>
+    <article class="card intent-card"><strong><code>400 invalid_request</code> or client-side <code>422</code></strong><p>For authenticated verification, pass the exact <code>mandate</code> and <code>signature</code> returned by <code>/v1/mandates</code>. Do not edit signed claims. Expiry must be a future RFC 3339 timestamp.</p></article>
+    <article class="card intent-card"><strong><code>429</code> rate limited</strong><p>Read <code>Retry-After</code> when present, wait, then retry with bounded exponential backoff. Do not retry a denied action as if it were a transport failure.</p></article>
+    <article class="card intent-card"><strong>Need support?</strong><p>Record the stable <code>error.code</code> and request ID. Share the request ID only—never a key, claim token, approval token, or signed production mandate.</p></article>
+  </div>
+</div></section>
+
+<section id="trust"><div class="wrap">
+  <p class="eyebrow">Trust, privacy, and limits</p>
+  <h2 style="margin:var(--s3) 0 var(--s5)">Authorization is a decision boundary, not action execution or identity proof</h2>
+  <article class="card intent-boundary read"><p>The keyless demo uses a throwaway signing key, stores nothing, and produces a signature that cannot be used on the authenticated endpoint. Authenticated use is governed by the <a href="/privacy">privacy policy</a> and <a href="/terms">terms</a>. Minimize mandate metadata and keep production credentials and approval tokens out of examples and logs.</p></article>
+  <ul class="intent-list read">
+    <li>The API evaluates only the mandate, action, policy, and state values you supply. It does not prove that a user actually authorized those inputs.</li>
+    <li>It does not execute payments, procurement, account changes, or data operations; your controlled system remains responsible for the side effect.</li>
+    <li>No customer or revenue result is claimed. A live page, demo receipt, package install, signup, key, or synthetic test is not commercial validation.</li>
+  </ul>
+  <div class="cta-row" style="margin-top:var(--s6)"><a class="btn btn-primary" href="/signup" data-signup>Create a sandbox key</a><a class="btn btn-secondary" href="/docs">Read the API reference</a></div>
+</div></section>
+</main>
+
+<footer class="site"><div class="wrap"><div class="cols">
+  <div><a class="brand" href="/" style="margin-bottom:8px"><span class="dot"></span>Agent Mandate</a><p style="color:var(--ink-3);font-size:14px;max-width:320px">Verify consequential agent actions against a signed, time-bounded mandate, resource limits, spend controls, and approval requirements.</p></div>
+  <div><strong style="font-size:14px">Product</strong><a href="/">Overview</a><a href="#fit">Use case</a><a href="/#pricing">Pricing</a></div>
+  <div><strong style="font-size:14px">Developers</strong><a href="/docs">API reference</a><a href="/quickstart">Quickstart</a><a href="/playground">Playground</a><a href="__API__/openapi.json">OpenAPI specification</a></div>
+  <div><strong style="font-size:14px">Trust</strong><a href="/status">Service status</a><a href="/privacy">Privacy policy</a><a href="/terms">Terms of service</a><a href="mailto:__CONTACT__">Support</a></div>
+</div><div class="legal">© 2026 · Payments processed by Square. Prices in USD.</div></div></footer>
+
+<script>
+const API = "__API__";
+const ENDPOINT = "/v1/demo/verify";
+const PAGE_PATH = "/use-cases/ai-agent-action-authorization-api";
+const DEFAULT_ATTRIBUTION = {
+  utm_source: "product_site",
+  utm_medium: "exact_intent",
+  utm_campaign: "search-agent-mandate-exact-intent-v1",
+  utm_content: "ai-agent-action-authorization-api-v1"
+};
+const input = document.getElementById("demo-in");
+const futureExpiry = new Date(Date.now() + 86400000).toISOString().replace(/\.\d{3}Z$/, "Z");
+input.value = input.value.replace("__FUTURE_EXPIRES_AT__", futureExpiry);
+const DEFAULT_INPUT = input.value;
+const output = document.getElementById("demo-out");
+const button = document.getElementById("demo-run");
+const status = document.getElementById("demo-status");
+function setStatus(label,className){status.textContent=label;status.className="chip "+className}
+function googleHost(host){return /^(?:www\.)?google\.(?:com|[a-z]{2}|co\.[a-z]{2}|com\.[a-z]{2})$/i.test(host)}
+(function carryAttribution(){
+  try{
+    const incoming=new URLSearchParams(location.search);const carried=new URLSearchParams();
+    for(const name of Object.keys(DEFAULT_ATTRIBUTION)){const value=incoming.get(name);if(value)carried.set(name,value)}
+    let referrerHost="";try{referrerHost=document.referrer?new URL(document.referrer).host:""}catch{}
+    if(!carried.has("utm_source")&&googleHost(referrerHost)){carried.set("utm_source","google_organic");carried.set("utm_medium","organic")}
+    for(const [name,value] of Object.entries(DEFAULT_ATTRIBUTION)){if(!carried.has(name))carried.set(name,value)}
+    if(referrerHost&&referrerHost!==location.host)carried.set("ref",referrerHost);
+    carried.set("lp",PAGE_PATH);
+    for(const link of document.querySelectorAll("a[data-signup]")){const target=new URL(link.getAttribute("href"),location.origin);carried.forEach((value,name)=>target.searchParams.set(name,value));link.setAttribute("href",target.pathname+target.search+target.hash)}
+  }catch{}
+})();
+document.getElementById("demo-reset").addEventListener("click",()=>{input.value=DEFAULT_INPUT;output.textContent="Run the demo to see the unedited API response.";setStatus("Ready","chip-info")});
+document.getElementById("demo-form").addEventListener("submit",async(event)=>{
+  event.preventDefault();let body;
+  try{body=JSON.parse(input.value)}catch(error){setStatus("Invalid JSON","chip-crit");output.textContent="The request body is not valid JSON.\n\n"+String(error);input.focus();return}
+  button.disabled=true;setStatus("Running…","chip-info");output.textContent="Calling "+ENDPOINT+" …";const started=performance.now();
+  try{const response=await fetch(API+ENDPOINT,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});const raw=await response.text();let parsed;try{parsed=JSON.parse(raw)}catch{parsed=raw}output.textContent=typeof parsed==="string"?parsed:JSON.stringify(parsed,null,2);setStatus(response.status+" · "+Math.round(performance.now()-started)+" ms",response.ok?"chip-ok":"chip-warn")}
+  catch(error){setStatus("Network error","chip-crit");output.textContent="Could not reach the API.\n\n"+String(error)}
+  finally{button.disabled=false}
+});
+for(const copy of document.querySelectorAll("[data-copy-target]")){copy.addEventListener("click",async()=>{const target=document.getElementById(copy.dataset.copyTarget);try{await navigator.clipboard.writeText(target.textContent);const old=copy.textContent;copy.textContent="Copied";setTimeout(()=>copy.textContent=old,1600)}catch{copy.textContent="Select and copy"}})}
+</script>
+</body>
+</html>
