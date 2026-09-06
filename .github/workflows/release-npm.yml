@@ -3,7 +3,7 @@ name: Publish initial npm release (N2 bootstrap)
 on:
   push:
     tags:
-      - 'npm-v1.0.0'
+      - 'npm-recovery-v1.0.0-1'
 
 permissions:
   contents: read
@@ -13,7 +13,7 @@ jobs:
   publish:
     if: >-
       github.repository == 'API-Disk-Integrations/agent-mandate' &&
-      github.ref == 'refs/tags/npm-v1.0.0'
+      github.ref == 'refs/tags/npm-recovery-v1.0.0-1'
     runs-on: ubuntu-latest
     environment: npm-release
     steps:
@@ -27,7 +27,7 @@ jobs:
         working-directory: packages/typescript
         run: |
           test "$GITHUB_REPOSITORY" = 'API-Disk-Integrations/agent-mandate'
-          test "$GITHUB_REF" = 'refs/tags/npm-v1.0.0'
+          test "$GITHUB_REF" = 'refs/tags/npm-recovery-v1.0.0-1'
           test "$(node -p "require('./package.json').name")" = 'agent-mandate'
           test "$(node -p "require('./package.json').version")" = '1.0.0'
           test "$(npm config get registry)" = 'https://registry.npmjs.org/'
@@ -50,7 +50,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_N2_BOOTSTRAP_TOKEN }}
         run: |
           test -n "$NODE_AUTH_TOKEN"
-          npm publish release-dist/agent-mandate-1.0.0.tgz --access public --provenance --ignore-scripts
+          npm publish ./release-dist/agent-mandate-1.0.0.tgz --access public --provenance --ignore-scripts
 
 # This is a one-release replacement for the accepted stage-only workflow.
 # It is not eligible to enter the repository until the separately recorded N2
